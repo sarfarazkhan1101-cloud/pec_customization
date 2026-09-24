@@ -1,0 +1,281 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "naming_series:",
+ "creation": "2026-09-14 00:00:00.000000",
+ "custom": 0,
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "dci",
+  "revision_label",
+  "revision_no",
+  "previous_revision",
+  "column_break_rev_top",
+  "project",
+  "scope",
+  "task",
+  "section_break_rev_people",
+  "responsible_engineer",
+  "submitted_by",
+  "submission_date",
+  "column_break_rev_people",
+  "current_reviewer",
+  "workflow_state",
+  "section_break_rev_doc",
+  "document_file",
+  "section_break_rev_comments",
+  "overall_comments",
+  "client_comments",
+  "section_break_rev_stages",
+  "review_stages",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "REV-.YYYY.-.#####",
+   "reqd": 1
+  },
+  {
+   "fieldname": "dci",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "DCI / Document",
+   "options": "DCI",
+   "reqd": 1
+  },
+  {
+   "fieldname": "revision_label",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Revision",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "revision_no",
+   "fieldtype": "Int",
+   "label": "Revision No",
+   "read_only": 1
+  },
+  {
+   "fieldname": "previous_revision",
+   "fieldtype": "Link",
+   "label": "Previous Revision",
+   "options": "PEC Revision",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_rev_top",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fetch_from": "dci.project",
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Project",
+   "options": "Project",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "dci.scope",
+   "fieldname": "scope",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Scope",
+   "options": "Scope",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "dci.task",
+   "fieldname": "task",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Task",
+   "options": "Task",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_rev_people",
+   "fieldtype": "Section Break",
+   "label": "Submission"
+  },
+  {
+   "fetch_from": "dci.responsible_engineer",
+   "fieldname": "responsible_engineer",
+   "fieldtype": "Link",
+   "label": "Responsible Engineer",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "default": "user",
+   "fieldname": "submitted_by",
+   "fieldtype": "Link",
+   "label": "Submitted By",
+   "options": "User"
+  },
+  {
+   "default": "Today",
+   "fieldname": "submission_date",
+   "fieldtype": "Date",
+   "label": "Submission Date"
+  },
+  {
+   "fieldname": "column_break_rev_people",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Reviewer of the current pending review stage. Maintained automatically.",
+   "fieldname": "current_reviewer",
+   "fieldtype": "Link",
+   "label": "Current Reviewer",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "workflow_state",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "in_standard_filter": 1,
+   "label": "Workflow State",
+   "options": "Draft\nSubmitted\nUnder Review\nRevision Required\nApproved",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_rev_doc",
+   "fieldtype": "Section Break",
+   "label": "Document"
+  },
+  {
+   "fieldname": "document_file",
+   "fieldtype": "Attach",
+   "label": "Document File"
+  },
+  {
+   "fieldname": "section_break_rev_comments",
+   "fieldtype": "Section Break",
+   "label": "Comments / Observations"
+  },
+  {
+   "fieldname": "overall_comments",
+   "fieldtype": "Small Text",
+   "label": "Submission Comments"
+  },
+  {
+   "fieldname": "client_comments",
+   "fieldtype": "Small Text",
+   "label": "Client / Review Comments"
+  },
+  {
+   "fieldname": "section_break_rev_stages",
+   "fieldtype": "Section Break",
+   "label": "Review Stages"
+  },
+  {
+   "fieldname": "review_stages",
+   "fieldtype": "Table",
+   "label": "Review Stages",
+   "options": "PEC Revision Review Stage"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "PEC Revision",
+   "print_hide": 1,
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "issingle": 0,
+ "links": [],
+ "modified": "2026-09-14 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "PEW Customizations",
+ "name": "PEC Revision",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Projects Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "PEC Administrator",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Engineer",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "Draftsman",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Reviewer",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "Client Reviewer",
+   "share": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "title_field": "revision_label",
+ "track_changes": 1
+}

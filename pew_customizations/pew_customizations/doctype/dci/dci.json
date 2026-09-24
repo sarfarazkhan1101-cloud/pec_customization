@@ -1,0 +1,189 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "naming_series:",
+ "creation": "2026-09-11 00:00:00.000000",
+ "custom": 0,
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "document_title",
+  "document_category",
+  "project",
+  "scope",
+  "task",
+  "column_break_dci_1",
+  "responsible_engineer",
+  "assigned_to",
+  "current_revision",
+  "overall_status",
+  "revision_requested_by"
+ ],
+ "fields": [
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "DCI-.#####",
+   "reqd": 1
+  },
+  {
+   "fieldname": "document_title",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Document Title",
+   "reqd": 1
+  },
+  {
+   "fieldname": "document_category",
+   "fieldtype": "Select",
+   "in_standard_filter": 1,
+   "label": "Document Category",
+   "options": "\nGeneral Arrangement Drawing\nDesign Calculation\nFabrication Drawing\nMaterial Specification\nIsometric Drawing\nPiping Layout Drawing\nDatasheet\nFinal Document\nOther"
+  },
+  {
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Project",
+   "options": "Project",
+   "reqd": 1
+  },
+  {
+   "fieldname": "scope",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Scope",
+   "options": "Scope"
+  },
+  {
+   "fieldname": "task",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Task",
+   "options": "Task"
+  },
+  {
+   "fieldname": "column_break_dci_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "responsible_engineer",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Responsible Engineer",
+   "options": "User"
+  },
+  {
+   "fieldname": "assigned_to",
+   "fieldtype": "Link",
+   "label": "Assigned To",
+   "options": "User"
+  },
+  {
+   "fieldname": "current_revision",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Current Revision",
+   "read_only": 1,
+   "description": "Maintained automatically from the latest linked PEC Revision (see Connections tab for full history)."
+  },
+  {
+   "fieldname": "overall_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Overall Status",
+   "options": "\nDraft\nSubmitted\nUnder Review\nRevision Required\nApproved",
+   "read_only": 1
+  },
+  {
+   "fieldname": "revision_requested_by",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "Revision Requested By",
+   "options": "\nEngineer\nClient",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "issingle": 0,
+ "links": [
+  {
+   "group": "Revisions",
+   "link_doctype": "PEC Revision",
+   "link_fieldname": "dci"
+  }
+ ],
+ "modified": "2026-09-11 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "PEW Customizations",
+ "name": "DCI",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Projects Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "amend": 1,
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Engineer",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "Draftsman",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "Associate",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "Client Reviewer",
+   "share": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "document_title",
+ "track_changes": 1
+}

@@ -1,0 +1,51 @@
+[
+ {
+  "docstatus": 0,
+  "doctype": "Sales Stage",
+  "modified": "2026-09-07 21:28:55.129374",
+  "name": "Cold",
+  "stage_name": "Cold"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Sales Stage",
+  "modified": "2026-09-07 21:28:55.139465",
+  "name": "Inquiry/Tender",
+  "stage_name": "Inquiry/Tender"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Sales Stage",
+  "modified": "2026-09-07 21:28:55.143556",
+  "name": "Qualification (Go/No-Go)",
+  "stage_name": "Qualification (Go/No-Go)"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Sales Stage",
+  "modified": "2026-09-07 21:28:55.147404",
+  "name": "Queries & Clarifications",
+  "stage_name": "Queries & Clarifications"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Sales Stage",
+  "modified": "2026-09-07 21:28:55.150446",
+  "name": "Proposal Submitted",
+  "stage_name": "Proposal Submitted"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Sales Stage",
+  "modified": "2026-09-07 21:28:55.152978",
+  "name": "Evaluation",
+  "stage_name": "Evaluation"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Sales Stage",
+  "modified": "2026-09-07 21:28:55.155560",
+  "name": "Closure (Won)",
+  "stage_name": "Closure (Won)"
+ }
+]

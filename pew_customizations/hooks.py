@@ -5,6 +5,114 @@ app_description = "Custom fields, server scripts, workflow and fixtures for PEW 
 app_email = "admin@example.com"
 app_license = "mit"
 
+# Fixtures
+# --------
+# Scoped precisely to records this app owns. The Custom Field filter for File
+# is deliberately narrowed to just `document_category` (not a blanket dt=File
+# filter) because the Frappe Drive app already has its own custom fields on
+# File that must not be swept into this app's fixtures.
+
+from pew_customizations.setup.install import (  # noqa: E402
+	LIFECYCLE_TASKS,
+	MARKET_SEGMENTS,
+	NOTIFICATION_NAME,
+	NOTIFICATION_REVISION_APPROVED,
+	NOTIFICATION_REVISION_REJECTED,
+	NOTIFICATION_REVISION_SUBMITTED,
+	NOTIFICATION_TASK_OVERDUE,
+	PEC_REVISION_WORKFLOW_NAME,
+	PEC_ROLES,
+	PROJECT_TEMPLATE_NAME,
+	SALES_STAGES,
+	SCOPE_TEMPLATE_NAMES,
+	SCOPE_TEMPLATE_TASKS,
+	SERVER_SCRIPT_CREATE_PROJECT,
+	SERVER_SCRIPT_LOST_GUARD,
+	SERVER_SCRIPT_SHARE_FILES,
+	WORKFLOW_NAME,
+	get_all_custom_fieldnames,
+)
+
+# Files import in the order listed below (not alphabetically) so that Task
+# (referenced by Project Template rows) is always synced before Project
+# Template itself on a fresh site.
+fixture_auto_order = True
+
+_ALL_TEMPLATE_TASK_SUBJECTS = [t[0] for t in LIFECYCLE_TASKS] + [t[0] for t in SCOPE_TEMPLATE_TASKS]
+_ALL_PROJECT_TEMPLATE_NAMES = [PROJECT_TEMPLATE_NAME, *SCOPE_TEMPLATE_NAMES.values()]
+_ALL_NOTIFICATION_NAMES = [
+	NOTIFICATION_NAME,
+	NOTIFICATION_REVISION_SUBMITTED,
+	NOTIFICATION_REVISION_REJECTED,
+	NOTIFICATION_REVISION_APPROVED,
+	NOTIFICATION_TASK_OVERDUE,
+]
+
+fixtures = [
+	{"dt": "Custom Field", "filters": [["fieldname", "in", get_all_custom_fieldnames()]]},
+	{
+		"dt": "Property Setter",
+		"filters": [["doc_type", "=", "Project"], ["field_name", "=", "naming_series"]],
+	},
+	{"dt": "Role", "filters": [["name", "in", PEC_ROLES]]},
+	{"dt": "Sales Stage", "filters": [["name", "in", SALES_STAGES]]},
+	{"dt": "Market Segment", "filters": [["name", "in", MARKET_SEGMENTS]]},
+	{"dt": "Notification", "filters": [["name", "in", _ALL_NOTIFICATION_NAMES]]},
+	{"dt": "Workflow", "filters": [["name", "in", [WORKFLOW_NAME, PEC_REVISION_WORKFLOW_NAME]]]},
+	{
+		"dt": "Server Script",
+		"filters": [
+			[
+				"name",
+				"in",
+				[SERVER_SCRIPT_CREATE_PROJECT, SERVER_SCRIPT_SHARE_FILES, SERVER_SCRIPT_LOST_GUARD],
+			]
+		],
+	},
+	{
+		"dt": "Task",
+		"filters": [["is_template", "=", 1], ["subject", "in", _ALL_TEMPLATE_TASK_SUBJECTS]],
+	},
+	{"dt": "Project Template", "filters": [["name", "in", _ALL_PROJECT_TEMPLATE_NAMES]]},
+]
+
+# Document Events
+# ---------------
+doc_events = {
+	"PEC Revision": {
+		"on_update": "pew_customizations.pec_revision_utils.sync_dci_rollup",
+		"on_submit": "pew_customizations.pec_revision_utils.sync_dci_rollup",
+		"on_cancel": "pew_customizations.pec_revision_utils.sync_dci_rollup",
+	},
+	"Task": {
+		"on_update": "pew_customizations.utils.sync_scope_from_tasks",
+		"on_trash": "pew_customizations.utils.sync_scope_from_tasks",
+	},
+	"Scope": {
+		"on_update": "pew_customizations.utils.sync_project_from_scopes",
+		"on_trash": "pew_customizations.utils.sync_project_from_scopes",
+	},
+}
+
+# Dashboard Connections
+# ----------------------
+override_doctype_dashboards = {
+	"Project": "pew_customizations.dashboard.get_project_dashboard_data",
+	"Task": "pew_customizations.dashboard.get_task_dashboard_data",
+}
+
+# Doctype JS
+# ----------
+doctype_js = {
+	"Scope": "public/js/scope.js",
+	"DCI": "public/js/dci.js",
+	"PEC Revision": "public/js/pec_revision.js",
+}
+
+doctype_list_js = {
+	"Scope": "public/js/scope_list.js",
+}
+
 # Apps
 # ------------------
 
@@ -25,7 +133,7 @@ app_license = "mit"
 # ------------------
 
 # include js, css files in header of desk.html
-# app_include_css = "/assets/pew_customizations/css/pew_customizations.css"
+app_include_css = "/assets/pew_customizations/css/pew_customizations.css"
 # app_include_js = "/assets/pew_customizations/js/pew_customizations.js"
 
 # include js, css files in header of web template

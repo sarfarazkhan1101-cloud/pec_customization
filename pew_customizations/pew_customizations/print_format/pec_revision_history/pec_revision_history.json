@@ -1,0 +1,21 @@
+{
+ "align_labels_right": 0,
+ "creation": "2026-09-14 00:00:00.000000",
+ "custom_format": 1,
+ "disabled": 0,
+ "doc_type": "DCI",
+ "docstatus": 0,
+ "doctype": "Print Format",
+ "font": "Default",
+ "line_breaks": 0,
+ "modified": "2026-09-14 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "PEW Customizations",
+ "name": "PEC Revision History",
+ "owner": "Administrator",
+ "print_format_type": "Jinja",
+ "raw_printing": 0,
+ "show_section_headings": 0,
+ "standard": "Yes",
+ "html": "<div class=\"print-heading\"><h2>Document Control Index &ndash; Revision History</h2></div>\n<table class=\"table table-bordered\" style=\"width:100%; margin-bottom: 20px;\">\n <tr><td style=\"width:20%\"><b>DCI</b></td><td>{{ doc.name }}</td><td style=\"width:20%\"><b>Document Title</b></td><td>{{ doc.document_title }}</td></tr>\n <tr><td><b>Project</b></td><td>{{ doc.project }}</td><td><b>Scope</b></td><td>{{ doc.scope or \"\" }}</td></tr>\n <tr><td><b>Task</b></td><td>{{ doc.task or \"\" }}</td><td><b>Overall Status</b></td><td>{{ doc.overall_status or \"\" }}</td></tr>\n</table>\n\n{% set revisions = frappe.get_all(\"PEC Revision\", filters={\"dci\": doc.name}, fields=[\"name\", \"revision_label\", \"workflow_state\", \"submitted_by\", \"submission_date\", \"current_reviewer\", \"overall_comments\", \"client_comments\"], order_by=\"revision_no asc\") %}\n\n{% for rev in revisions %}\n<div style=\"page-break-inside: avoid; margin-bottom: 18px; border: 1px solid #ccc; padding: 10px;\">\n <h4>Revision {{ rev.revision_label }} &mdash; <a href=\"/app/pec-revision/{{ rev.name }}\">{{ rev.name }}</a></h4>\n <table class=\"table table-bordered\" style=\"width:100%\">\n  <tr><td style=\"width:20%\"><b>Status</b></td><td>{{ rev.workflow_state }}</td><td style=\"width:20%\"><b>Submitted By</b></td><td>{{ rev.submitted_by or \"\" }}</td></tr>\n  <tr><td><b>Submission Date</b></td><td>{{ rev.submission_date or \"\" }}</td><td><b>Current Reviewer</b></td><td>{{ rev.current_reviewer or \"\" }}</td></tr>\n </table>\n {% set stages = frappe.get_all(\"PEC Revision Review Stage\", filters={\"parent\": rev.name}, fields=[\"sequence\", \"stage_name\", \"reviewer\", \"status\", \"comments\", \"reviewed_on\"], order_by=\"sequence asc\") %}\n {% if stages %}\n <table class=\"table table-bordered\" style=\"width:100%; margin-top:8px;\">\n  <thead><tr><th>#</th><th>Stage</th><th>Reviewer</th><th>Status</th><th>Reviewed On</th><th>Comments</th></tr></thead>\n  <tbody>\n  {% for stage in stages %}\n   <tr><td>{{ stage.sequence }}</td><td>{{ stage.stage_name }}</td><td>{{ stage.reviewer }}</td><td>{{ stage.status }}</td><td>{{ stage.reviewed_on or \"\" }}</td><td>{{ stage.comments or \"\" }}</td></tr>\n  {% endfor %}\n  </tbody>\n </table>\n {% endif %}\n {% if rev.overall_comments %}<p><b>Submission Comments:</b> {{ rev.overall_comments }}</p>{% endif %}\n {% if rev.client_comments %}<p><b>Client / Review Comments:</b> {{ rev.client_comments }}</p>{% endif %}\n</div>\n{% else %}\n<p>No revisions have been created for this DCI yet.</p>\n{% endfor %}\n"
+}

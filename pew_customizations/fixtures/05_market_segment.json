@@ -1,0 +1,51 @@
+[
+ {
+  "docstatus": 0,
+  "doctype": "Market Segment",
+  "market_segment": "Water & Wastewater",
+  "modified": "2026-09-07 21:28:55.169788",
+  "name": "Water & Wastewater"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Market Segment",
+  "market_segment": "Oil & Gas",
+  "modified": "2026-09-07 21:28:55.180299",
+  "name": "Oil & Gas"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Market Segment",
+  "market_segment": "Power & Energy",
+  "modified": "2026-09-07 21:28:55.184413",
+  "name": "Power & Energy"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Market Segment",
+  "market_segment": "Infrastructure & Roads",
+  "modified": "2026-09-07 21:28:55.188117",
+  "name": "Infrastructure & Roads"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Market Segment",
+  "market_segment": "Industrial/Manufacturing Plants",
+  "modified": "2026-09-07 21:28:55.191204",
+  "name": "Industrial/Manufacturing Plants"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Market Segment",
+  "market_segment": "Marine & Ports",
+  "modified": "2026-09-07 21:28:55.194347",
+  "name": "Marine & Ports"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Market Segment",
+  "market_segment": "Government/Municipal",
+  "modified": "2026-09-07 21:28:55.197464",
+  "name": "Government/Municipal"
+ }
+]

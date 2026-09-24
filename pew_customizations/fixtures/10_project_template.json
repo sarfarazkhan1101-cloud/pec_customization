@@ -1,0 +1,154 @@
+[
+ {
+  "disabled": 0,
+  "docstatus": 0,
+  "doctype": "Project Template",
+  "modified": "2026-09-07 21:28:55.876177",
+  "name": "PEW Engineering Service Lifecycle",
+  "project_type": null,
+  "tasks": [
+   {
+    "subject": "Input Data Received",
+    "task": "TASK-2026-00001"
+   },
+   {
+    "subject": "Design & Drafting",
+    "task": "TASK-2026-00002"
+   },
+   {
+    "subject": "Initial Client Submission",
+    "task": "TASK-2026-00003"
+   },
+   {
+    "subject": "Revision/Comment Cycle 1",
+    "task": "TASK-2026-00004"
+   },
+   {
+    "subject": "Revision 2",
+    "task": "TASK-2026-00005"
+   },
+   {
+    "subject": "Revision 3",
+    "task": "TASK-2026-00006"
+   },
+   {
+    "subject": "Final Approval",
+    "task": "TASK-2026-00007"
+   }
+  ]
+ },
+ {
+  "disabled": 0,
+  "docstatus": 0,
+  "doctype": "Project Template",
+  "modified": "2026-09-14 21:47:08.264833",
+  "name": "PEC Piping Scope Template",
+  "project_type": null,
+  "tasks": [
+   {
+    "subject": "Input Data Collection",
+    "task": "TASK-2026-00008"
+   },
+   {
+    "subject": "Design",
+    "task": "TASK-2026-00009"
+   },
+   {
+    "subject": "Internal Check",
+    "task": "TASK-2026-00010"
+   },
+   {
+    "subject": "Engineering Review",
+    "task": "TASK-2026-00011"
+   },
+   {
+    "subject": "Drafting",
+    "task": "TASK-2026-00012"
+   },
+   {
+    "subject": "Final Review",
+    "task": "TASK-2026-00013"
+   },
+   {
+    "subject": "Submission",
+    "task": "TASK-2026-00014"
+   }
+  ]
+ },
+ {
+  "disabled": 0,
+  "docstatus": 0,
+  "doctype": "Project Template",
+  "modified": "2026-09-14 21:47:08.288338",
+  "name": "PEC Mechanical Scope Template",
+  "project_type": null,
+  "tasks": [
+   {
+    "subject": "Input Data Collection",
+    "task": "TASK-2026-00008"
+   },
+   {
+    "subject": "Design",
+    "task": "TASK-2026-00009"
+   },
+   {
+    "subject": "Internal Check",
+    "task": "TASK-2026-00010"
+   },
+   {
+    "subject": "Engineering Review",
+    "task": "TASK-2026-00011"
+   },
+   {
+    "subject": "Drafting",
+    "task": "TASK-2026-00012"
+   },
+   {
+    "subject": "Final Review",
+    "task": "TASK-2026-00013"
+   },
+   {
+    "subject": "Submission",
+    "task": "TASK-2026-00014"
+   }
+  ]
+ },
+ {
+  "disabled": 0,
+  "docstatus": 0,
+  "doctype": "Project Template",
+  "modified": "2026-09-14 21:47:08.300289",
+  "name": "PEC Electrical Scope Template",
+  "project_type": null,
+  "tasks": [
+   {
+    "subject": "Input Data Collection",
+    "task": "TASK-2026-00008"
+   },
+   {
+    "subject": "Design",
+    "task": "TASK-2026-00009"
+   },
+   {
+    "subject": "Internal Check",
+    "task": "TASK-2026-00010"
+   },
+   {
+    "subject": "Engineering Review",
+    "task": "TASK-2026-00011"
+   },
+   {
+    "subject": "Drafting",
+    "task": "TASK-2026-00012"
+   },
+   {
+    "subject": "Final Review",
+    "task": "TASK-2026-00013"
+   },
+   {
+    "subject": "Submission",
+    "task": "TASK-2026-00014"
+   }
+  ]
+ }
+]

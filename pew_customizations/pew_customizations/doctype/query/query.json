@@ -1,0 +1,207 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "naming_series:",
+ "creation": "2026-09-11 00:00:00.000000",
+ "custom": 0,
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "project",
+  "scope",
+  "task",
+  "dci",
+  "column_break_qry_1",
+  "query_type",
+  "priority",
+  "escalated_to",
+  "section_break_qry_people",
+  "raised_by",
+  "date_raised",
+  "column_break_qry_2",
+  "assigned_to",
+  "date_resolved",
+  "section_break_qry_desc",
+  "query_description",
+  "resolution"
+ ],
+ "fields": [
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "QRY-.#####",
+   "reqd": 1
+  },
+  {
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Project",
+   "options": "Project",
+   "reqd": 1
+  },
+  {
+   "fieldname": "scope",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Scope",
+   "options": "Scope"
+  },
+  {
+   "fieldname": "task",
+   "fieldtype": "Link",
+   "label": "Task",
+   "options": "Task"
+  },
+  {
+   "fieldname": "dci",
+   "fieldtype": "Link",
+   "label": "DCI / Document",
+   "options": "DCI"
+  },
+  {
+   "fieldname": "column_break_qry_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "query_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Query Type",
+   "options": "Technical Clarification\nDocument Discrepancy\nClient Comment\nSchedule Issue\nOther"
+  },
+  {
+   "default": "Medium",
+   "fieldname": "priority",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Priority",
+   "options": "Low\nMedium\nHigh"
+  },
+  {
+   "fieldname": "escalated_to",
+   "fieldtype": "Select",
+   "in_standard_filter": 1,
+   "label": "Escalated To",
+   "options": "\nDraftsman\nEngineer\nProject Manager / Management\nClient"
+  },
+  {
+   "fieldname": "section_break_qry_people",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "raised_by",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Raised By",
+   "options": "User"
+  },
+  {
+   "default": "Now",
+   "fieldname": "date_raised",
+   "fieldtype": "Datetime",
+   "label": "Date Raised"
+  },
+  {
+   "fieldname": "column_break_qry_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "assigned_to",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Assigned To",
+   "options": "User"
+  },
+  {
+   "fieldname": "date_resolved",
+   "fieldtype": "Datetime",
+   "label": "Date Resolved"
+  },
+  {
+   "fieldname": "section_break_qry_desc",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "query_description",
+   "fieldtype": "Text",
+   "label": "Query Description",
+   "reqd": 1
+  },
+  {
+   "fieldname": "resolution",
+   "fieldtype": "Text",
+   "label": "Resolution"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "issingle": 0,
+ "links": [],
+ "modified": "2026-09-11 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "PEW Customizations",
+ "name": "Query",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Projects Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Engineer",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "Draftsman",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "Associate",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "Client Reviewer",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "query_description",
+ "track_changes": 1
+}

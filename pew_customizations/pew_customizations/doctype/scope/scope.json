@@ -1,0 +1,200 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "naming_series:",
+ "creation": "2026-09-11 00:00:00.000000",
+ "custom": 0,
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "scope_name",
+  "project",
+  "scope_type",
+  "status",
+  "column_break_scope_1",
+  "scope_template",
+  "assigned_engineer",
+  "associate",
+  "progress",
+  "section_break_scope_dates",
+  "start_date",
+  "column_break_scope_dates",
+  "end_date",
+  "section_break_scope_details",
+  "input_link",
+  "description"
+ ],
+ "fields": [
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "SCOPE-.#####",
+   "reqd": 1
+  },
+  {
+   "fieldname": "scope_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Scope Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Project",
+   "options": "Project",
+   "reqd": 1
+  },
+  {
+   "fieldname": "scope_type",
+   "fieldtype": "Select",
+   "in_standard_filter": 1,
+   "label": "Scope Type",
+   "options": "\nVessel Design\nMechanical Calculation\nFabrication Documentation\nPiping Layout\nIsometric Drawings\nMaterial Documentation\nStructural Design\nCivil Design\nOther"
+  },
+  {
+   "default": "Open",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Open\nIn Progress\nCompleted\nClosed"
+  },
+  {
+   "fieldname": "column_break_scope_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Select a Scope-level Project Template to auto-generate this Scope's Tasks in sequence.",
+   "fieldname": "scope_template",
+   "fieldtype": "Link",
+   "label": "Scope Template",
+   "options": "Project Template"
+  },
+  {
+   "fieldname": "assigned_engineer",
+   "fieldtype": "Link",
+   "label": "Assigned Engineer",
+   "options": "User"
+  },
+  {
+   "fieldname": "associate",
+   "fieldtype": "Link",
+   "label": "Associate / Sub-vendor",
+   "options": "User"
+  },
+  {
+   "fieldname": "progress",
+   "fieldtype": "Percent",
+   "in_list_view": 1,
+   "label": "Progress",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_scope_dates",
+   "fieldtype": "Section Break",
+   "label": "Timeline"
+  },
+  {
+   "fieldname": "start_date",
+   "fieldtype": "Date",
+   "label": "Start Date"
+  },
+  {
+   "fieldname": "column_break_scope_dates",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "end_date",
+   "fieldtype": "Date",
+   "label": "End Date"
+  },
+  {
+   "fieldname": "section_break_scope_details",
+   "fieldtype": "Section Break",
+   "label": "Details"
+  },
+  {
+   "fieldname": "input_link",
+   "fieldtype": "Attach",
+   "label": "Input / Reference Document"
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Text Editor",
+   "label": "Description"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "is_submittable": 0,
+ "issingle": 0,
+ "links": [
+  {
+   "group": "PEC",
+   "link_doctype": "Task",
+   "link_fieldname": "scope"
+  },
+  {
+   "group": "PEC",
+   "link_doctype": "DCI",
+   "link_fieldname": "scope"
+  }
+ ],
+ "modified": "2026-09-11 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "PEW Customizations",
+ "name": "Scope",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Projects Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Engineer",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "print": 1,
+   "read": 1,
+   "role": "Draftsman"
+  },
+  {
+   "print": 1,
+   "read": 1,
+   "role": "Associate"
+  },
+  {
+   "print": 1,
+   "read": 1,
+   "role": "Client Reviewer"
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "scope_name",
+ "track_changes": 1
+}
