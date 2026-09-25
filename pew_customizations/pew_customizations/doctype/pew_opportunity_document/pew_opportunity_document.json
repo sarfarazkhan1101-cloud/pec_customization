@@ -1,0 +1,67 @@
+{
+ "actions": [],
+ "creation": "2026-09-24 00:00:00.000000",
+ "custom": 0,
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "document_type",
+  "file",
+  "description",
+  "document_class",
+  "stage"
+ ],
+ "fields": [
+  {
+   "columns": 5,
+   "fieldname": "document_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Document Type",
+   "options": "\nTender / RFQ Document\nDrawing\nTechnical Specification\nClarification / Query Response\nAddendum / Corrigendum\nMinutes of Meeting\nSite Visit Note\nProposal\nPricing / BOQ\nEMD / Bid Security\nNDA\nOther Commercial",
+   "reqd": 1
+  },
+  {
+   "columns": 5,
+   "fieldname": "file",
+   "fieldtype": "Attach",
+   "in_list_view": 1,
+   "label": "File",
+   "reqd": 1
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Data",
+   "label": "Description"
+  },
+  {
+   "description": "Set from the document type. Only Technical documents are copied to the Project.",
+   "fieldname": "document_class",
+   "fieldtype": "Select",
+   "label": "Class",
+   "options": "\nTechnical\nCommercial",
+   "read_only": 1
+  },
+  {
+   "fieldname": "stage",
+   "fieldtype": "Link",
+   "label": "Stage",
+   "options": "Sales Stage",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-09-24 18:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "PEW Customizations",
+ "name": "PEW Opportunity Document",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

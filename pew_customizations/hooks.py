@@ -1,21 +1,22 @@
 app_name = "pew_customizations"
 app_title = "PEW Customizations"
 app_publisher = "PEW Engineering & Consultancy Pvt Ltd"
-app_description = "Custom fields, server scripts, workflow and fixtures for PEW Engineering CRM/Tender tracking and Project Management automations on ERPNext v16"
+app_description = "Tender pipeline on Opportunity, Project handoff and PEC project-execution customizations for PEW Engineering on ERPNext v16"
 app_email = "admin@example.com"
 app_license = "mit"
 
 # Fixtures
 # --------
-# Scoped precisely to records this app owns. The Custom Field filter for File
-# is deliberately narrowed to just `document_category` (not a blanket dt=File
-# filter) because the Frappe Drive app already has its own custom fields on
-# File that must not be swept into this app's fixtures.
+# Scoped precisely to records this app owns: Custom Fields and Property Setters by record name
+# (File also carries the Drive app's custom fields, Opportunity may carry other apps').
 
+# Names starting with "_" are not registered as hooks (hooks are cached by pickling them).
+from pew_customizations.crm import config as _crm  # noqa: E402
+from pew_customizations.crm.customizations import get_custom_field_names as _crm_fields  # noqa: E402
+from pew_customizations.crm.customizations import get_property_setter_names as _crm_ps  # noqa: E402
 from pew_customizations.setup.install import (  # noqa: E402
 	LIFECYCLE_TASKS,
 	MARKET_SEGMENTS,
-	NOTIFICATION_NAME,
 	NOTIFICATION_REVISION_APPROVED,
 	NOTIFICATION_REVISION_REJECTED,
 	NOTIFICATION_REVISION_SUBMITTED,
@@ -23,25 +24,20 @@ from pew_customizations.setup.install import (  # noqa: E402
 	PEC_REVISION_WORKFLOW_NAME,
 	PEC_ROLES,
 	PROJECT_TEMPLATE_NAME,
-	SALES_STAGES,
 	SCOPE_TEMPLATE_NAMES,
 	SCOPE_TEMPLATE_TASKS,
-	SERVER_SCRIPT_CREATE_PROJECT,
-	SERVER_SCRIPT_LOST_GUARD,
-	SERVER_SCRIPT_SHARE_FILES,
 	WORKFLOW_NAME,
-	get_all_custom_fieldnames,
+	get_custom_field_names as _pec_fields,
 )
 
-# Files import in the order listed below (not alphabetically) so that Task
-# (referenced by Project Template rows) is always synced before Project
-# Template itself on a fresh site.
+# Files are numbered in the order listed below and import in that order: Custom Fields before the
+# records that use them (Sales Stage.pew_stage_order), Task before Project Template.
 fixture_auto_order = True
 
 _ALL_TEMPLATE_TASK_SUBJECTS = [t[0] for t in LIFECYCLE_TASKS] + [t[0] for t in SCOPE_TEMPLATE_TASKS]
 _ALL_PROJECT_TEMPLATE_NAMES = [PROJECT_TEMPLATE_NAME, *SCOPE_TEMPLATE_NAMES.values()]
 _ALL_NOTIFICATION_NAMES = [
-	NOTIFICATION_NAME,
+	*_crm.NOTIFICATIONS,
 	NOTIFICATION_REVISION_SUBMITTED,
 	NOTIFICATION_REVISION_REJECTED,
 	NOTIFICATION_REVISION_APPROVED,
@@ -49,31 +45,25 @@ _ALL_NOTIFICATION_NAMES = [
 ]
 
 fixtures = [
-	{"dt": "Custom Field", "filters": [["fieldname", "in", get_all_custom_fieldnames()]]},
+	{"dt": "Custom Field", "filters": [["name", "in", _pec_fields() + _crm_fields()]]},
 	{
 		"dt": "Property Setter",
-		"filters": [["doc_type", "=", "Project"], ["field_name", "=", "naming_series"]],
+		"filters": [["name", "in", ["Project-naming_series-options", *_crm_ps()]]],
 	},
 	{"dt": "Role", "filters": [["name", "in", PEC_ROLES]]},
-	{"dt": "Sales Stage", "filters": [["name", "in", SALES_STAGES]]},
+	{"dt": "Sales Stage", "filters": [["name", "in", _crm.PIPELINE_STAGES]]},
 	{"dt": "Market Segment", "filters": [["name", "in", MARKET_SEGMENTS]]},
 	{"dt": "Notification", "filters": [["name", "in", _ALL_NOTIFICATION_NAMES]]},
 	{"dt": "Workflow", "filters": [["name", "in", [WORKFLOW_NAME, PEC_REVISION_WORKFLOW_NAME]]]},
-	{
-		"dt": "Server Script",
-		"filters": [
-			[
-				"name",
-				"in",
-				[SERVER_SCRIPT_CREATE_PROJECT, SERVER_SCRIPT_SHARE_FILES, SERVER_SCRIPT_LOST_GUARD],
-			]
-		],
-	},
+	{"dt": "Opportunity Lost Reason", "filters": [["name", "in", _crm.LOST_REASONS]]},
 	{
 		"dt": "Task",
 		"filters": [["is_template", "=", 1], ["subject", "in", _ALL_TEMPLATE_TASK_SUBJECTS]],
 	},
 	{"dt": "Project Template", "filters": [["name", "in", _ALL_PROJECT_TEMPLATE_NAMES]]},
+	{"dt": "UTM Source", "filters": [["name", "in", _crm.LEAD_SOURCES]]},
+	# Opportunity's permissions incl. level 1 (Work Order / Client PO) for Sales Manager
+	{"dt": "Custom DocPerm", "filters": [["parent", "=", "Opportunity"]]},
 ]
 
 # Document Events
@@ -92,13 +82,38 @@ doc_events = {
 		"on_update": "pew_customizations.utils.sync_project_from_scopes",
 		"on_trash": "pew_customizations.utils.sync_project_from_scopes",
 	},
+	"Opportunity": {
+		"onload": "pew_customizations.crm.opportunity.onload",
+		"validate": "pew_customizations.crm.opportunity.validate",
+		"on_update": "pew_customizations.crm.opportunity.on_update",
+		"on_trash": "pew_customizations.crm.opportunity.on_trash",
+	},
+	"Customer": {
+		"onload": "pew_customizations.crm.customer.onload",
+		"after_insert": "pew_customizations.crm.customer.repoint_source_opportunity",
+	},
+	"Communication": {
+		"before_insert": "pew_customizations.crm.communication.link_by_subject_tag",
+	},
+	"Project": {
+		"on_update": "pew_customizations.projects.project_team.sync_team_access",
+		"on_trash": "pew_customizations.projects.project_team.revoke_all",
+	},
 }
+
+# Work Order / Client PO files are readable by Sales Managers only
+has_permission = {
+	"File": "pew_customizations.crm.file.has_permission",
+}
+
+after_migrate = ["pew_customizations.crm.setup.after_migrate"]
 
 # Dashboard Connections
 # ----------------------
 override_doctype_dashboards = {
 	"Project": "pew_customizations.dashboard.get_project_dashboard_data",
 	"Task": "pew_customizations.dashboard.get_task_dashboard_data",
+	"Opportunity": "pew_customizations.dashboard.get_opportunity_dashboard_data",
 }
 
 # Doctype JS
@@ -107,6 +122,8 @@ doctype_js = {
 	"Scope": "public/js/scope.js",
 	"DCI": "public/js/dci.js",
 	"PEC Revision": "public/js/pec_revision.js",
+	"Opportunity": "public/js/opportunity.js",
+	"Customer": "public/js/customer.js",
 }
 
 doctype_list_js = {

@@ -1,0 +1,42 @@
+[
+ {
+  "description": null,
+  "docstatus": 0,
+  "doctype": "UTM Source",
+  "modified": "2026-07-06 00:47:00.123933",
+  "name": "Existing Customer",
+  "slug": null
+ },
+ {
+  "description": null,
+  "docstatus": 0,
+  "doctype": "UTM Source",
+  "modified": "2026-07-06 00:47:00.130549",
+  "name": "Reference",
+  "slug": null
+ },
+ {
+  "description": null,
+  "docstatus": 0,
+  "doctype": "UTM Source",
+  "modified": "2026-07-06 00:47:00.137672",
+  "name": "Exhibition",
+  "slug": null
+ },
+ {
+  "description": null,
+  "docstatus": 0,
+  "doctype": "UTM Source",
+  "modified": "2026-09-24 16:38:09.518091",
+  "name": "Tender Portal",
+  "slug": null
+ },
+ {
+  "description": null,
+  "docstatus": 0,
+  "doctype": "UTM Source",
+  "modified": "2026-09-24 16:38:09.525734",
+  "name": "Direct Email",
+  "slug": null
+ }
+]

@@ -4,4 +4,6 @@
 pew_customizations.patches.remove_dci_revision_doctype
 
 [post_model_sync]
-# Patches added in this section will be executed after doctypes are migrated
+# Patches added in this section will be executed after doctypes are migratedpew_customizations.patches.crm_v2_remove_v1_server_scripts
+pew_customizations.patches.crm_v2_migrate_v1_opportunity_fields
+pew_customizations.patches.crm_v2_sales_stages

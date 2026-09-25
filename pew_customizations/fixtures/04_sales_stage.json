@@ -2,50 +2,57 @@
  {
   "docstatus": 0,
   "doctype": "Sales Stage",
-  "modified": "2026-09-07 21:28:55.129374",
+  "modified": "2026-09-24 16:38:09.472139",
+  "name": "Qualification",
+  "pew_stage_order": 3,
+  "stage_name": "Qualification"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Sales Stage",
+  "modified": "2026-09-24 16:38:09.469717",
   "name": "Cold",
+  "pew_stage_order": 1,
   "stage_name": "Cold"
  },
  {
   "docstatus": 0,
   "doctype": "Sales Stage",
-  "modified": "2026-09-07 21:28:55.139465",
-  "name": "Inquiry/Tender",
-  "stage_name": "Inquiry/Tender"
+  "modified": "2026-09-24 16:38:09.471112",
+  "name": "Inquiry / Tender",
+  "pew_stage_order": 2,
+  "stage_name": "Inquiry / Tender"
  },
  {
   "docstatus": 0,
   "doctype": "Sales Stage",
-  "modified": "2026-09-07 21:28:55.143556",
-  "name": "Qualification (Go/No-Go)",
-  "stage_name": "Qualification (Go/No-Go)"
- },
- {
-  "docstatus": 0,
-  "doctype": "Sales Stage",
-  "modified": "2026-09-07 21:28:55.147404",
+  "modified": "2026-09-24 16:38:09.473933",
   "name": "Queries & Clarifications",
+  "pew_stage_order": 4,
   "stage_name": "Queries & Clarifications"
  },
  {
   "docstatus": 0,
   "doctype": "Sales Stage",
-  "modified": "2026-09-07 21:28:55.150446",
+  "modified": "2026-09-24 16:38:09.475617",
   "name": "Proposal Submitted",
+  "pew_stage_order": 5,
   "stage_name": "Proposal Submitted"
  },
  {
   "docstatus": 0,
   "doctype": "Sales Stage",
-  "modified": "2026-09-07 21:28:55.152978",
+  "modified": "2026-09-24 16:38:09.477240",
   "name": "Evaluation",
+  "pew_stage_order": 6,
   "stage_name": "Evaluation"
  },
  {
   "docstatus": 0,
   "doctype": "Sales Stage",
-  "modified": "2026-09-07 21:28:55.155560",
+  "modified": "2026-09-24 16:38:09.478915",
   "name": "Closure (Won)",
+  "pew_stage_order": 7,
   "stage_name": "Closure (Won)"
  }
 ]

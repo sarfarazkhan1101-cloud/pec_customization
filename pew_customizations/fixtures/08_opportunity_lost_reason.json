@@ -1,0 +1,51 @@
+[
+ {
+  "docstatus": 0,
+  "doctype": "Opportunity Lost Reason",
+  "lost_reason": "Outside Domain",
+  "modified": "2026-09-24 16:38:09.491248",
+  "name": "Outside Domain"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Opportunity Lost Reason",
+  "lost_reason": "Internal No-Go/Lack of Bandwidth",
+  "modified": "2026-09-24 16:38:09.499381",
+  "name": "Internal No-Go/Lack of Bandwidth"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Opportunity Lost Reason",
+  "lost_reason": "Unacceptable Commercial Terms",
+  "modified": "2026-09-24 16:38:09.501755",
+  "name": "Unacceptable Commercial Terms"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Opportunity Lost Reason",
+  "lost_reason": "Technical Disqualification",
+  "modified": "2026-09-24 16:38:09.503337",
+  "name": "Technical Disqualification"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Opportunity Lost Reason",
+  "lost_reason": "Outbid on Price",
+  "modified": "2026-09-24 16:38:09.504705",
+  "name": "Outbid on Price"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Opportunity Lost Reason",
+  "lost_reason": "Client Cancelled Project",
+  "modified": "2026-09-24 16:38:09.505915",
+  "name": "Client Cancelled Project"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Opportunity Lost Reason",
+  "lost_reason": "Client Went Cold",
+  "modified": "2026-09-24 16:38:09.507146",
+  "name": "Client Went Cold"
+ }
+]

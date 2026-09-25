@@ -1,15 +1,8 @@
 import frappe
 from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 
-SALES_STAGES = [
-	"Cold",
-	"Inquiry/Tender",
-	"Qualification (Go/No-Go)",
-	"Queries & Clarifications",
-	"Proposal Submitted",
-	"Evaluation",
-	"Closure (Won)",
-]
+# The tender pipeline on Opportunity (stages, fields, notifications, handoff) lives in
+# pew_customizations.crm; this module keeps the PEC project-execution setup.
 
 MARKET_SEGMENTS = [
 	"Water & Wastewater",
@@ -33,23 +26,19 @@ LIFECYCLE_TASKS = [
 ]
 PROJECT_TEMPLATE_NAME = "PEW Engineering Service Lifecycle"
 
-
-def _stage_gate(min_stage):
-	"""depends_on eval: section becomes visible once sales_stage reaches
-	min_stage or later (and stays visible after, so earlier data is never
-	hidden as the deal progresses)."""
-	stage_list_js = str(SALES_STAGES).replace("'", '"')
-	idx = SALES_STAGES.index(min_stage)
-	return f"eval:{stage_list_js}.indexOf(doc.sales_stage) >= {idx}"
-
-SERVER_SCRIPT_CREATE_PROJECT = "PEW: Create Project on Opportunity Won"
-SERVER_SCRIPT_SHARE_FILES = "PEW: Share Project Files with New Team Member"
-SERVER_SCRIPT_LOST_GUARD = "PEW: Enforce Lost Reason and Freeze Lost Opportunity"
-NOTIFICATION_NAME = "Bid Validity Expiry Alert"
 WORKFLOW_NAME = "Project Approval Workflow"
 
 # PEC (Project Engineering / Execution) process additions
-PEC_ROLES = ["Reviewer", "Scope Manager", "PEC Administrator"]
+# Engineer, Draftsman, Associate and Client Reviewer are used by the PEC doctype permissions.
+PEC_ROLES = [
+	"Reviewer",
+	"Scope Manager",
+	"PEC Administrator",
+	"Engineer",
+	"Draftsman",
+	"Associate",
+	"Client Reviewer",
+]
 PEC_PROJECT_NAMING_SERIES = "PEC-.YYYY.-.####"
 PEC_REVISION_WORKFLOW_NAME = "PEC Revision Approval Workflow"
 
@@ -77,18 +66,18 @@ NOTIFICATION_TASK_OVERDUE = "PEC Task Overdue"
 
 
 def run():
+	from pew_customizations.crm.setup import apply_customizations
+
 	create_all_custom_fields()
-	create_sales_stages()
 	create_market_segments()
-	create_bid_validity_notification()
 	create_project_approval_workflow()
-	create_server_scripts()
 	create_engineering_service_lifecycle_template()
 	create_pec_roles()
 	create_project_naming_series_option()
 	create_pec_revision_workflow()
 	create_pec_notifications()
 	create_scope_templates()
+	apply_customizations()
 	frappe.db.commit()
 	print("pew_customizations setup complete.")
 
@@ -97,219 +86,14 @@ def create_all_custom_fields():
 	create_custom_fields(get_custom_fields(), update=True)
 
 
-def get_all_custom_fieldnames():
-	"""Flat list of every fieldname this app creates, across all doctypes.
-	Used to scope the `fixtures` export to exactly our own Custom Field records
-	(e.g. File already has unrelated custom fields from the Drive app)."""
-	return [field["fieldname"] for fields in get_custom_fields().values() for field in fields]
+def get_custom_field_names():
+	"""Custom Field record names ("<doctype>-<fieldname>") created here. Used to scope the
+	`fixtures` export to exactly our own records (e.g. File has other apps' custom fields)."""
+	return [f"{dt}-{field['fieldname']}" for dt, fields in get_custom_fields().items() for field in fields]
 
 
 def get_custom_fields():
 	return {
-		"Opportunity": [
-			{
-				"fieldname": "tender_tracking_tab",
-				"label": "Tender Tracking",
-				"fieldtype": "Tab Break",
-				"insert_after": "utm_analytics_section",
-			},
-			{
-				"fieldname": "cold_stage_section",
-				"label": "Cold Stage",
-				"fieldtype": "Section Break",
-				"insert_after": "tender_tracking_tab",
-			},
-			{
-				"fieldname": "expected_tender_release_date",
-				"label": "Expected Tender Release Date",
-				"fieldtype": "Date",
-				"insert_after": "cold_stage_section",
-			},
-			{
-				"fieldname": "cold_stage_notes",
-				"label": "Cold Stage Notes",
-				"fieldtype": "Small Text",
-				"insert_after": "expected_tender_release_date",
-			},
-			{
-				"fieldname": "qualification_section",
-				"label": "Qualification (Go/No-Go)",
-				"fieldtype": "Section Break",
-				"insert_after": "cold_stage_notes",
-				"depends_on": _stage_gate("Inquiry/Tender"),
-			},
-			{
-				"fieldname": "type_of_organization",
-				"label": "Type of Organization",
-				"fieldtype": "Select",
-				"options": "\nGovernment\nPrivate Sector\nPSU",
-				"insert_after": "qualification_section",
-			},
-			{
-				"fieldname": "referral_source_type",
-				"label": "Referral Source Type",
-				"fieldtype": "Select",
-				"options": "\nCustomer\nContact",
-				"insert_after": "type_of_organization",
-			},
-			{
-				"fieldname": "referral_received_from",
-				"label": "Referral Received From",
-				"fieldtype": "Dynamic Link",
-				"options": "referral_source_type",
-				"insert_after": "referral_source_type",
-			},
-			{
-				"fieldname": "qualification_column_break",
-				"fieldtype": "Column Break",
-				"insert_after": "referral_received_from",
-			},
-			{
-				"fieldname": "wingman",
-				"label": "Wingman",
-				"fieldtype": "Link",
-				"options": "User",
-				"insert_after": "qualification_column_break",
-			},
-			{
-				"fieldname": "nda_status",
-				"label": "NDA Status",
-				"fieldtype": "Select",
-				"options": "\nYes\nNo\nNot Required",
-				"insert_after": "wingman",
-			},
-			{
-				"fieldname": "feasibility_section",
-				"label": "Feasibility Checks",
-				"fieldtype": "Section Break",
-				"insert_after": "nda_status",
-				"depends_on": _stage_gate("Inquiry/Tender"),
-			},
-			{
-				"fieldname": "location_feasibility",
-				"label": "Location Feasibility",
-				"fieldtype": "Select",
-				"options": "\nYes\nNo\nReview Needed",
-				"insert_after": "feasibility_section",
-			},
-			{
-				"fieldname": "budget_feasibility",
-				"label": "Budget Feasibility",
-				"fieldtype": "Select",
-				"options": "\nYes\nNo\nReview Needed",
-				"insert_after": "location_feasibility",
-			},
-			{
-				"fieldname": "authority_confirmed",
-				"label": "Authority Confirmed",
-				"fieldtype": "Select",
-				"options": "\nYes\nNo\nReview Needed",
-				"insert_after": "budget_feasibility",
-			},
-			{
-				"fieldname": "feasibility_column_break",
-				"fieldtype": "Column Break",
-				"insert_after": "authority_confirmed",
-			},
-			{
-				"fieldname": "timeline_feasibility",
-				"label": "Timeline Feasibility",
-				"fieldtype": "Select",
-				"options": "\nYes\nNo\nReview Needed",
-				"insert_after": "feasibility_column_break",
-			},
-			{
-				"fieldname": "bandwidth_feasibility",
-				"label": "Bandwidth Feasibility",
-				"fieldtype": "Select",
-				"options": "\nYes\nNo\nReview Needed",
-				"insert_after": "timeline_feasibility",
-			},
-			{
-				"fieldname": "subcontract_required",
-				"label": "Subcontract Required",
-				"fieldtype": "Check",
-				"insert_after": "bandwidth_feasibility",
-			},
-			{
-				"fieldname": "subcontracted_scope",
-				"label": "Subcontracted Scope",
-				"fieldtype": "Small Text",
-				"depends_on": "eval:doc.subcontract_required",
-				"insert_after": "subcontract_required",
-			},
-			{
-				"fieldname": "queries_section",
-				"label": "Queries & Clarifications",
-				"fieldtype": "Section Break",
-				"insert_after": "subcontracted_scope",
-				"depends_on": _stage_gate("Queries & Clarifications"),
-			},
-			{
-				"fieldname": "pre_bid_meeting_date",
-				"label": "Pre-Bid Meeting Date",
-				"fieldtype": "Date",
-				"insert_after": "queries_section",
-			},
-			{
-				"fieldname": "proposal_section",
-				"label": "Proposal Submitted",
-				"fieldtype": "Section Break",
-				"insert_after": "pre_bid_meeting_date",
-				"depends_on": _stage_gate("Proposal Submitted"),
-			},
-			{
-				"fieldname": "submitted_bid_value",
-				"label": "Submitted Bid Value",
-				"fieldtype": "Currency",
-				"insert_after": "proposal_section",
-			},
-			{
-				"fieldname": "bid_validity_expiry_date",
-				"label": "Bid Validity Expiry Date",
-				"fieldtype": "Date",
-				"insert_after": "submitted_bid_value",
-			},
-			{
-				"fieldname": "evaluation_section",
-				"label": "Evaluation",
-				"fieldtype": "Section Break",
-				"insert_after": "bid_validity_expiry_date",
-				"depends_on": _stage_gate("Evaluation"),
-			},
-			{
-				"fieldname": "evaluation_substage",
-				"label": "Evaluation Sub-stage",
-				"fieldtype": "Select",
-				"options": "\nTechnical Bid Review\nPrice Bid Review\nCommercial Negotiation",
-				"insert_after": "evaluation_section",
-			},
-			{
-				"fieldname": "commercial_rank",
-				"label": "Commercial Rank",
-				"fieldtype": "Select",
-				"options": "\nL1\nL2\nL3\nN/A",
-				"insert_after": "evaluation_substage",
-			},
-			{
-				"fieldname": "competitor_who_won",
-				"label": "Competitor Who Won",
-				"fieldtype": "Data",
-				"insert_after": "commercial_rank",
-			},
-		],
-		"File": [
-			{
-				"fieldname": "document_category",
-				"label": "Document Category",
-				"fieldtype": "Select",
-				"options": (
-					"\nTechnical Scope\nClient Clarification\nSite Visit Note\n"
-					"Technical Addendum\nProposal\nPricing\nWork Order/PO"
-				),
-				"insert_after": "file_type",
-			},
-		],
 		"Project": [
 			{
 				"fieldname": "pending_review",
@@ -329,6 +113,8 @@ def get_custom_fields():
 				"options": "Opportunity",
 				"insert_after": "pending_review",
 				"read_only": 1,
+				# DB-level guard: one Project per won Opportunity (see crm.opportunity.create_project)
+				"unique": 1,
 			},
 			{
 				"fieldname": "pec_details_tab",
@@ -422,46 +208,10 @@ def get_custom_fields():
 	}
 
 
-def create_sales_stages():
-	for stage in SALES_STAGES:
-		if not frappe.db.exists("Sales Stage", stage):
-			frappe.get_doc({"doctype": "Sales Stage", "stage_name": stage}).insert(ignore_permissions=True)
-
-
 def create_market_segments():
 	for segment in MARKET_SEGMENTS:
 		if not frappe.db.exists("Market Segment", segment):
 			frappe.get_doc({"doctype": "Market Segment", "market_segment": segment}).insert(ignore_permissions=True)
-
-
-def create_bid_validity_notification():
-	if frappe.db.exists("Notification", NOTIFICATION_NAME):
-		return
-
-	doc = frappe.get_doc(
-		{
-			"doctype": "Notification",
-			"name": NOTIFICATION_NAME,
-			"subject": "Bid validity for {{ doc.name }} expires in 7 days",
-			"document_type": "Opportunity",
-			"event": "Days Before",
-			"date_changed": "bid_validity_expiry_date",
-			"days_in_advance": 7,
-			"condition": 'doc.status not in ("Closed", "Lost")',
-			"channel": "Email",
-			"send_system_notification": 1,
-			"message": (
-				"<p>The bid validity for Opportunity <b>{{ doc.name }}</b> "
-				"({{ doc.customer_name or doc.party_name or \"\" }}) expires on "
-				"{{ doc.bid_validity_expiry_date }}.</p>"
-			),
-			"recipients": [
-				{"receiver_by_document_field": "opportunity_owner"},
-				{"receiver_by_document_field": "wingman"},
-			],
-		}
-	)
-	doc.insert(ignore_permissions=True)
 
 
 def create_project_approval_workflow():
@@ -504,152 +254,6 @@ def create_project_approval_workflow():
 		}
 	)
 	doc.insert(ignore_permissions=True)
-
-
-def create_server_scripts():
-	create_project_creation_script()
-	create_file_share_script()
-	create_lost_guard_script()
-
-
-def create_project_creation_script():
-	if frappe.db.exists("Server Script", SERVER_SCRIPT_CREATE_PROJECT):
-		return
-
-	script = '''allowed_categories = ["Technical Scope", "Client Clarification", "Site Visit Note", "Technical Addendum"]
-
-if doc.status == "Closed" and not frappe.db.exists("Project", {"source_opportunity": doc.name}):
-	project = frappe.new_doc("Project")
-	project.project_name = doc.title or doc.customer_name or doc.name
-	project.customer = doc.party_name if doc.opportunity_from == "Customer" else None
-	project.company = doc.company
-	project.source_opportunity = doc.name
-	project.pending_review = 1
-	project.estimated_costing = doc.submitted_bid_value
-	project.expected_start_date = doc.expected_closing
-	project.insert(ignore_permissions=True)
-
-	files = frappe.get_all(
-		"File",
-		filters={
-			"attached_to_doctype": "Opportunity",
-			"attached_to_name": doc.name,
-			"document_category": ["in", allowed_categories],
-		},
-		fields=["file_name", "file_url", "is_private", "document_category", "folder"],
-	)
-
-	for f in files:
-		new_file = frappe.new_doc("File")
-		new_file.file_url = f.file_url
-		new_file.file_name = f.file_name
-		new_file.is_private = f.is_private
-		new_file.document_category = f.document_category
-		new_file.attached_to_doctype = "Project"
-		new_file.attached_to_name = project.name
-		new_file.insert(ignore_permissions=True)
-
-	frappe.msgprint(
-		f"Project {project.name} created (Pending Review) from this Opportunity.",
-		alert=True,
-		indicator="green",
-	)
-'''
-
-	frappe.get_doc(
-		{
-			"doctype": "Server Script",
-			"name": SERVER_SCRIPT_CREATE_PROJECT,
-			"script_type": "DocType Event",
-			"reference_doctype": "Opportunity",
-			"doctype_event": "After Save",
-			"disabled": 0,
-			"script": script,
-		}
-	).insert(ignore_permissions=True)
-
-
-def create_file_share_script():
-	if frappe.db.exists("Server Script", SERVER_SCRIPT_SHARE_FILES):
-		return
-
-	# Note: this is bound to Project's own After Save event, not to the Project
-	# User child doctype. Frappe persists child table rows via a raw db_update()
-	# during the parent's save (see Document.update_child_table()), which never
-	# calls the child row's insert() -- so an "After Insert" script on Project
-	# User itself would never fire. Diffing get_doc_before_save() against the
-	# current `users` table is the reliable way to detect newly added rows.
-	script = '''before = doc.get_doc_before_save()
-previous_users = {row.user for row in (before.users if before else [])}
-current_users = {row.user for row in doc.users}
-new_users = current_users - previous_users
-
-if new_users and not doc.pending_review:
-	files = frappe.get_all(
-		"File",
-		filters={"attached_to_doctype": "Project", "attached_to_name": doc.name},
-		fields=["name"],
-	)
-	for user in new_users:
-		for f in files:
-			already_shared = frappe.db.exists(
-				"DocShare",
-				{"share_doctype": "File", "share_name": f.name, "user": user},
-			)
-			if not already_shared:
-				frappe.call(
-					"frappe.share.add",
-					doctype="File",
-					name=f.name,
-					user=user,
-					read=1,
-					write=0,
-					notify=0,
-				)
-'''
-
-	frappe.get_doc(
-		{
-			"doctype": "Server Script",
-			"name": SERVER_SCRIPT_SHARE_FILES,
-			"script_type": "DocType Event",
-			"reference_doctype": "Project",
-			"doctype_event": "After Save",
-			"disabled": 0,
-			"script": script,
-		}
-	).insert(ignore_permissions=True)
-
-
-def create_lost_guard_script():
-	if frappe.db.exists("Server Script", SERVER_SCRIPT_LOST_GUARD):
-		return
-
-	# "Lost is not a separate stage -- an Opportunity is marked Lost from
-	# whatever stage it's in ... and the record freezes (no further stage
-	# changes) after that." Also requires a Lost Reason to actually be
-	# recorded, since nothing else enforces that outside the desk "Lost"
-	# dialog (declare_enquiry_lost).
-	script = '''before = doc.get_doc_before_save()
-
-if before and before.status == "Lost":
-	frappe.throw("This Opportunity is marked Lost and is locked. No further changes are allowed.")
-
-if doc.status == "Lost" and not doc.lost_reasons:
-	frappe.throw("Please select at least one Lost Reason before marking this Opportunity as Lost.")
-'''
-
-	frappe.get_doc(
-		{
-			"doctype": "Server Script",
-			"name": SERVER_SCRIPT_LOST_GUARD,
-			"script_type": "DocType Event",
-			"reference_doctype": "Opportunity",
-			"doctype_event": "Before Save",
-			"disabled": 0,
-			"script": script,
-		}
-	).insert(ignore_permissions=True)
 
 
 def _get_or_create_template_task_chain(task_specs):

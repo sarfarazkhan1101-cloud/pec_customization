@@ -1,5 +1,5 @@
-"""End-to-end test for the PEC (Project -> Scope -> Task -> Revision) process.
-Mirrors the structure of setup/e2e_test.py (check()/cleanup() pattern).
+"""End-to-end test for the PEC (Project -> Scope -> Task -> Revision) process
+(check()/cleanup() pattern). The tender pipeline is covered by tests/test_opportunity_pipeline.py.
 
 Run: bench --site <site> execute pew_customizations.setup.pec_e2e_test.run
 """
