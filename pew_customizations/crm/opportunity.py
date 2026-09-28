@@ -14,6 +14,7 @@ from pew_customizations.crm.config import (
 	ACTIVE_STATUSES,
 	ATTACH_FIELD_CATEGORIES,
 	COLD_STAGE,
+	DEFAULT_STAGE,
 	DOCUMENT_CLASSES,
 	DOCUMENT_TABLES,
 	ENTRY_GATES,
@@ -89,7 +90,7 @@ def validate(doc, method=None):
 	old_idx = stage_index(old.sales_stage) if old else 0
 
 	if not doc.sales_stage:
-		doc.sales_stage = COLD_STAGE
+		doc.sales_stage = DEFAULT_STAGE
 	idx = stage_index(doc.sales_stage)
 	doc.pew_stage_index = idx
 

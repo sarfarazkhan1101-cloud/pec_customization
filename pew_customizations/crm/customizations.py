@@ -8,15 +8,13 @@ filters from `get_custom_field_names()` / `get_property_setter_names()`.
 import json
 
 from pew_customizations.crm.config import (
+	DEFAULT_STAGE,
 	DOCUMENT_CLASSES,
-	EVALUATION,
 	INQUIRY,
 	ORGANIZATION_TYPES,
-	PROPOSAL,
 	QUALIFICATION,
 	REFERRAL_LEAD_SOURCE,
 	TENDER_REF_REQUIRED_FOR,
-	WON,
 	WORK_ORDER_FIELD,
 	stage_from,
 )
@@ -228,19 +226,16 @@ OPPORTUNITY_PIPELINE_FIELDS = _chain(
 			"label": "Submitted Bid Value",
 			"fieldtype": "Currency",
 			"options": "currency",
-			"mandatory_depends_on": stage_from(PROPOSAL),
 		},
 		{
 			"fieldname": "pew_bid_validity_expiry",
 			"label": "Bid Validity Expiry Date",
 			"fieldtype": "Date",
-			"mandatory_depends_on": stage_from(PROPOSAL),
 		},
 		{
 			"fieldname": "pew_final_proposal",
 			"label": "Final Proposal",
 			"fieldtype": "Attach",
-			"mandatory_depends_on": stage_from(PROPOSAL),
 			"description": "Commercial document. Never copied to the Project.",
 		},
 		_column("pew_stage5_cb1"),
@@ -249,7 +244,6 @@ OPPORTUNITY_PIPELINE_FIELDS = _chain(
 			"label": "EMD / Bid Security",
 			"fieldtype": "Select",
 			"options": "\nPending\nSubmitted\nNot Applicable",
-			"mandatory_depends_on": stage_from(PROPOSAL),
 		},
 		{
 			"fieldname": "pew_emd_reference",
@@ -270,7 +264,6 @@ OPPORTUNITY_PIPELINE_FIELDS = _chain(
 			"label": "Sub-Stage Status",
 			"fieldtype": "Select",
 			"options": "\nTechnical Bid Review\nPrice Bid Review\nCommercial Negotiation",
-			"mandatory_depends_on": stage_from(EVALUATION),
 		},
 		{
 			"fieldname": "pew_commercial_rank",
@@ -286,7 +279,6 @@ OPPORTUNITY_PIPELINE_FIELDS = _chain(
 			"fieldname": "pew_loi_date",
 			"label": "LOI / PO Issued On",
 			"fieldtype": "Date",
-			"mandatory_depends_on": stage_from(EVALUATION + 1),
 		},
 		# 7 · Closure (Won)
 		_section(7, "7 · Closure (Won)"),
@@ -295,19 +287,16 @@ OPPORTUNITY_PIPELINE_FIELDS = _chain(
 			"label": "Final Negotiated Contract Value",
 			"fieldtype": "Currency",
 			"options": "currency",
-			"mandatory_depends_on": stage_from(WON),
 		},
 		{
 			"fieldname": "pew_project_start_date",
 			"label": "Expected Project Start Date",
 			"fieldtype": "Date",
-			"mandatory_depends_on": stage_from(WON),
 		},
 		{
 			"fieldname": "pew_project_end_date",
 			"label": "Expected Project End Date",
 			"fieldtype": "Date",
-			"mandatory_depends_on": stage_from(WON),
 		},
 		_column("pew_stage7_cb1"),
 		{
@@ -315,7 +304,6 @@ OPPORTUNITY_PIPELINE_FIELDS = _chain(
 			"label": "Work Order / Client PO",
 			"fieldtype": "Attach",
 			"permlevel": 1,
-			"mandatory_depends_on": stage_from(WON),
 			"description": "Visible to Sales Managers only. Stays on the Opportunity; upload as a private file.",
 		},
 		{
@@ -417,7 +405,7 @@ CUSTOM_FIELDS = {
 
 # Standard Opportunity fields reused for the spec: (fieldname, property, value, property_type)
 OPPORTUNITY_PROPERTY_SETTERS = [
-	("sales_stage", "default", "Cold", "Data"),
+	("sales_stage", "default", DEFAULT_STAGE, "Data"),
 	("sales_stage", "reqd", "1", "Check"),
 	("market_segment", "label", "Market Segment / Application Type", "Data"),
 	("market_segment", "mandatory_depends_on", stage_from(INQUIRY + 1), "Code"),

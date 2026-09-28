@@ -20,6 +20,9 @@ PIPELINE_STAGES = [
 SALES_STAGE_ORDER = {stage: idx for idx, stage in enumerate(PIPELINE_STAGES, start=1)}
 COLD, INQUIRY, QUALIFICATION, QUERIES, PROPOSAL, EVALUATION, WON = range(1, 8)
 COLD_STAGE = PIPELINE_STAGES[COLD - 1]
+# Stage of every new Opportunity (form, Lead / Customer / Prospect "Create", API). Cold stays
+# selectable for early market intelligence.
+DEFAULT_STAGE = PIPELINE_STAGES[INQUIRY - 1]
 WON_STAGE = PIPELINE_STAGES[WON - 1]
 
 # v1 stage names renamed/merged by patches.crm_v2_sales_stages
@@ -175,7 +178,8 @@ EXIT_GATES = {
 		Gate(label="Assigned to the estimation team", check=_is_assigned),
 	],
 	QUALIFICATION: [
-		Gate("pew_tender_documents"),
+		# File is optional on document rows, so a row only counts once something is uploaded
+		Gate("pew_tender_documents", check=lambda d: any(row.file for row in d.pew_tender_documents)),
 		Gate("pew_bid_submission_deadline"),
 		Gate("pew_nda_status"),
 		Gate("pew_nda_attachment", when=lambda d: d.pew_nda_status == "Yes"),
@@ -183,37 +187,9 @@ EXIT_GATES = {
 		Gate("pew_go_no_go"),
 		Gate(label="Go / No-Go decision is Go", check=lambda d: d.pew_go_no_go == "Go"),
 	],
-	QUERIES: [
-		Gate("pew_queries_clarified"),
-		Gate("pew_scope_locked"),
-	],
-	PROPOSAL: [
-		Gate(
-			label="EMD / Bid Security submitted (or not applicable)",
-			check=lambda d: d.pew_emd_status in ("Submitted", "Not Applicable"),
-		),
-	],
-	EVALUATION: [
-		Gate("pew_loi_date"),
-	],
 }
 
-# Required while AT or beyond stage n: the stage name says the event already happened,
-# or the data is the Project handoff payload. mandatory_depends_on = stage_from(n).
-ENTRY_GATES = {
-	PROPOSAL: [
-		Gate("pew_submitted_bid_value"),
-		Gate("pew_bid_validity_expiry"),
-		Gate("pew_final_proposal"),
-		Gate("pew_emd_status"),
-	],
-	EVALUATION: [
-		Gate("pew_evaluation_substage"),
-	],
-	WON: [
-		Gate("pew_final_contract_value"),
-		Gate("pew_project_start_date"),
-		Gate("pew_project_end_date"),
-		Gate(WORK_ORDER_FIELD),
-	],
-}
+# Required while AT or beyond stage n. mandatory_depends_on = stage_from(n).
+# Empty on purpose: from Queries & Clarifications (stage 4) on, nothing is mandatory, so a deal that
+# passed Qualification can move freely up to Closure (Won).
+ENTRY_GATES = {}

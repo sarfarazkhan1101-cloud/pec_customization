@@ -21,6 +21,8 @@ setup at the end.
   `Opportunity.pew_stage_index` fetches it and drives every section's `depends_on`.
 - **Gates**: `pew_customizations/crm/config.py` (`EXIT_GATES`, `ENTRY_GATES`) is the single list of
   checklist items. The server enforces it on every forward move, including Kanban drags and API writes.
+  Only leaving Inquiry / Tender and Qualification has checklist items; from Queries & Clarifications
+  to Closure (Won) no field is mandatory.
 - **Lost**: standard Declare Lost dialog (button added); the deal keeps its stage, gets a red "Lost" tag
   and becomes read-only except for Sales Managers.
 - **Won**: moving to Closure (Won) (Sales Manager only) sets status Converted and creates one Project in

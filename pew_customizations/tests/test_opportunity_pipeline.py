@@ -12,6 +12,8 @@ from frappe.model.workflow import apply_workflow
 from frappe.tests import IntegrationTestCase
 from frappe.utils import add_days, add_to_date, now_datetime, today
 
+from erpnext.crm.doctype.lead.lead import make_opportunity as make_opportunity_from_lead
+
 from pew_customizations.crm import config
 from pew_customizations.crm.customer import onload as customer_onload
 from pew_customizations.crm.file import has_permission as file_has_permission
@@ -193,10 +195,18 @@ class TestOpportunityPipeline(IntegrationTestCase):
 
 	# stages and gates --------------------------------------------------------------------------
 
-	def test_new_opportunity_starts_cold(self):
+	def test_new_opportunity_starts_at_inquiry(self):
 		opp = self.new_opportunity()
-		self.assertEqual(opp.sales_stage, "Cold")
-		self.assertEqual(opp.pew_stage_index, 1)
+		self.assertEqual(opp.sales_stage, "Inquiry / Tender")
+		self.assertEqual(opp.pew_stage_index, config.INQUIRY)
+
+	def test_opportunity_from_lead_starts_at_inquiry(self):
+		lead = frappe.get_doc({"doctype": "Lead", "lead_name": "Stage Default Lead"}).insert(ignore_permissions=True)
+		self.assertEqual(make_opportunity_from_lead(lead.name).sales_stage, config.DEFAULT_STAGE)
+
+	def test_cold_is_still_selectable(self):
+		opp = self.new_opportunity(sales_stage=config.COLD_STAGE)
+		self.assertEqual(opp.pew_stage_index, config.COLD)
 
 	def test_non_pipeline_stage_rejected(self):
 		if not frappe.db.exists("Sales Stage", "PEW Test Legacy Stage"):
@@ -205,7 +215,7 @@ class TestOpportunityPipeline(IntegrationTestCase):
 			self.new_opportunity(sales_stage="PEW Test Legacy Stage")
 
 	def test_gate_blocks_form_and_kanban_moves(self):
-		opp = self.new_opportunity()
+		opp = self.new_opportunity(sales_stage=config.COLD_STAGE)
 		opp.sales_stage = STAGES[config.INQUIRY - 1]
 		opp.save()  # leaving Cold needs nothing
 
@@ -249,12 +259,25 @@ class TestOpportunityPipeline(IntegrationTestCase):
 		self.advance(opp, config.QUALIFICATION)
 		opp.sales_stage = STAGES[config.PROPOSAL - 1]
 		with self.assertRaises(frappe.ValidationError):
-			opp.save()  # stage 3 and 4 checklists incomplete
+			opp.save()  # stage 3 checklist incomplete
 		opp.reload()
 		self.complete(opp, config.PROPOSAL)
 		opp.sales_stage = STAGES[config.PROPOSAL - 1]
 		opp.save()
 		self.assertEqual(opp.pew_stage_index, config.PROPOSAL)
+
+	def test_stages_after_qualification_have_no_mandatory_fields(self):
+		fields = frappe.get_meta("Opportunity").fields
+		order = [df.fieldname for df in fields]
+		for df in fields[order.index("pew_stage4_section") : order.index("pew_project")]:
+			self.assertFalse(df.reqd or df.mandatory_depends_on, df.fieldname)
+
+	def test_won_needs_nothing_after_qualification(self):
+		opp = self.advance(self.new_opportunity(), config.QUERIES)
+		opp.sales_stage = config.WON_STAGE
+		opp.save()
+		self.assertEqual(opp.status, "Converted")
+		self.assertTrue(opp.pew_project)
 
 	def test_backward_move_allowed(self):
 		opp = self.advance(self.new_opportunity(), config.QUERIES)
@@ -341,6 +364,17 @@ class TestOpportunityPipeline(IntegrationTestCase):
 			frappe.db.get_value("File", {"file_url": opp.pew_commercial_documents[0].file}, "document_category"),
 			"Pricing / BOQ",
 		)
+
+	def test_document_rows_do_not_need_a_file(self):
+		opp = self.advance(self.new_opportunity(), config.QUALIFICATION)
+		opp.append("pew_tender_documents", {"document_type": "Tender / RFQ Document"})
+		opp.append("pew_commercial_documents", {"document_type": "Pricing / BOQ"})
+		opp.save()
+		self.assertEqual(opp.pew_commercial_documents[0].document_class, "Commercial")
+
+		# ...but a tender row without a file does not tick the tender-documents checklist item
+		missing = [label for _stage, label in get_missing_items(opp, config.QUERIES)]
+		self.assertIn(opp.meta.get_label("pew_tender_documents"), missing)
 
 	def test_won_creates_one_project_with_technical_documents_only(self):
 		opp = self.advance(self.new_opportunity(), config.EVALUATION)
@@ -479,7 +513,7 @@ class TestOpportunityPipeline(IntegrationTestCase):
 
 	def test_customer_pipeline_counts(self):
 		party = _customer("PEW Pipeline Counts Customer").name
-		self.new_opportunity(party_name=party)
+		self.new_opportunity(party_name=party, sales_stage=config.COLD_STAGE)
 		self.advance(self.new_opportunity(party_name=party), config.QUALIFICATION)
 		self.declare_lost(self.advance(self.new_opportunity(party_name=party), config.INQUIRY))
 		self.advance(self.new_opportunity(party_name=party), config.WON)
