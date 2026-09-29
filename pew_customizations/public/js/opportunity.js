@@ -10,6 +10,7 @@ frappe.ui.form.on("Opportunity", {
 		const info = pew_pipeline_info(frm);
 		frm.pew_saved_stage = frm.doc.sales_stage;
 
+		pew_sort_stage_options(frm);
 		pew_show_checklist(frm, info);
 		pew_setup_lost_state(frm, info);
 		pew_setup_buttons(frm, info);
@@ -82,6 +83,30 @@ function pew_pipeline_info(frm) {
 	return (frm.doc.__onload && frm.doc.__onload.pew_pipeline) || {};
 }
 
+// Frappe sorts link results alphabetically on the server, so the Sales Stage dropdown is re-sorted
+// into pipeline order here (display only). Mirrors PIPELINE_STAGES in crm/config.py; unsaved
+// Opportunities have no __onload, hence the list instead of pew_pipeline_info().stage_order.
+function pew_sort_stage_options(frm) {
+	const awesomplete = frm.fields_dict.sales_stage && frm.fields_dict.sales_stage.awesomplete;
+	if (!awesomplete) return;
+
+	const stages = [
+		"Cold",
+		"Inquiry / Tender",
+		"Qualification",
+		"Queries & Clarifications",
+		"Proposal Submitted",
+		"Evaluation",
+		"Closure (Won)",
+	];
+	// unknown entries (filter note, "Create a new", "Advanced Search") keep their place at the end
+	const position = (item) => {
+		const idx = stages.indexOf(item.value);
+		return idx === -1 ? stages.length : idx;
+	};
+	awesomplete.sort = (a, b) => position(a) - position(b);
+}
+
 // Opens the current stage's section on the EPC Pipeline tab and collapses the others. The sections'
 // collapsible_depends_on does this on load, but Frappe only re-evaluates it on refresh.
 function pew_show_current_stage(frm) {
@@ -94,6 +119,8 @@ function pew_show_current_stage(frm) {
 		// like on refresh, a section with missing mandatory fields stays open
 		if (other) other.collapse(idx !== current && !other.has_missing_mandatory());
 	}
+	// a new Opportunity fetches the index from the default stage on load, so it stays on Details
+	if (frm.is_new()) return;
 	frm.layout.select_tab("pew_pipeline_tab");
 	frappe.utils.scroll_to(section.wrapper, true, 15);
 }

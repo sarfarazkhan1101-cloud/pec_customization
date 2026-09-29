@@ -124,6 +124,7 @@ doctype_js = {
 	"PEC Revision": "public/js/pec_revision.js",
 	"Opportunity": "public/js/opportunity.js",
 	"Customer": "public/js/customer.js",
+	"Lead": "public/js/lead.js",
 }
 
 doctype_list_js = {

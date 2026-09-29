@@ -30,6 +30,8 @@ setup at the end.
 - **Execution Team**: the Project's standard Users table. After approval, each member gets a User
   Permission on the Project.
 - **Kanban**: "Tender Pipeline" board on `sales_stage`, maintained by `after_migrate`.
+- **Lead → Opportunity**: Create → Opportunity on a Lead opens the standard mapped Opportunity directly,
+  without ERPNext's Create Prospect / Create Contact dialog (`public/js/lead.js`). No Prospect is created.
 
 Changing fields or settings on a development site:
 

@@ -9,7 +9,7 @@ from unittest.mock import patch
 import frappe
 from frappe.client import set_value
 from frappe.model.workflow import apply_workflow
-from frappe.tests import IntegrationTestCase
+from frappe.tests import IntegrationTestCase, change_settings
 from frappe.utils import add_days, add_to_date, now_datetime, today
 
 from erpnext.crm.doctype.lead.lead import make_opportunity as make_opportunity_from_lead
@@ -205,6 +205,30 @@ class TestOpportunityPipeline(IntegrationTestCase):
 	def test_opportunity_from_lead_starts_at_inquiry(self):
 		lead = frappe.get_doc({"doctype": "Lead", "lead_name": "Stage Default Lead"}).insert(ignore_permissions=True)
 		self.assertEqual(make_opportunity_from_lead(lead.name).sales_stage, config.DEFAULT_STAGE)
+
+	@change_settings("CRM Settings", auto_creation_of_contact=1)
+	def test_opportunity_from_lead_needs_no_prospect(self):
+		"""What Lead → Create → Opportunity opens (public/js/lead.js skips the Prospect dialog)."""
+		lead = frappe.get_doc(
+			{
+				"doctype": "Lead",
+				"first_name": "Direct",
+				"last_name": "Opportunity",
+				"company_name": "Direct Opportunity Co",
+				"email_id": "direct.opportunity@pewclient.example.com",
+				"mobile_no": "+91 90000 00001",
+			}
+		).insert(ignore_permissions=True)
+		prospects = frappe.db.count("Prospect")
+
+		opp = make_opportunity_from_lead(lead.name)
+		opp.company = self.company
+		opp.insert(ignore_permissions=True)
+
+		self.assertEqual((opp.opportunity_from, opp.party_name), ("Lead", lead.name))
+		self.assertEqual((opp.contact_email, opp.contact_mobile), (lead.email_id, lead.mobile_no))
+		self.assertTrue(frappe.db.exists("Dynamic Link", {"parent": opp.contact_person, "link_name": lead.name}))
+		self.assertEqual(frappe.db.count("Prospect"), prospects)
 
 	def test_cold_is_still_selectable(self):
 		opp = self.new_opportunity(sales_stage=config.COLD_STAGE)
