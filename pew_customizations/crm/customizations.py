@@ -21,6 +21,8 @@ from pew_customizations.crm.config import (
 
 _YES_NO = "\nYes\nNo"
 _FEASIBILITY = "\nYes\nNo\nReview Needed"
+# fieldname fixed by the client spec, hence no pew_ prefix
+LOI_ISSUED_FIELD = "client_has_issued_loi_or_po"
 
 
 def _section(idx, label):
@@ -276,9 +278,16 @@ OPPORTUNITY_PIPELINE_FIELDS = _chain(
 		},
 		_column("pew_stage6_cb1"),
 		{
+			"fieldname": LOI_ISSUED_FIELD,
+			"label": "Client has issued a formal LOI or PO",
+			"fieldtype": "Check",
+			"description": "Check this box once the client has formally issued an LOI or PO.",
+		},
+		{
 			"fieldname": "pew_loi_date",
 			"label": "LOI / PO Issued On",
 			"fieldtype": "Date",
+			"depends_on": f"eval:doc.{LOI_ISSUED_FIELD}",
 		},
 		# 7 · Closure (Won)
 		_section(7, "7 · Closure (Won)"),

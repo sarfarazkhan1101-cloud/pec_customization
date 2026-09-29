@@ -16,6 +16,7 @@ from erpnext.crm.doctype.lead.lead import make_opportunity as make_opportunity_f
 
 from pew_customizations.crm import config
 from pew_customizations.crm.customer import onload as customer_onload
+from pew_customizations.crm.customizations import LOI_ISSUED_FIELD
 from pew_customizations.crm.file import has_permission as file_has_permission
 from pew_customizations.crm.opportunity import get_missing_items
 
@@ -142,6 +143,7 @@ class TestOpportunityPipeline(IntegrationTestCase):
 		if stage_index >= config.EVALUATION:
 			opp.pew_evaluation_substage = "Price Bid Review"
 		if stage_index >= config.WON:
+			opp.set(LOI_ISSUED_FIELD, 1)
 			opp.pew_loi_date = today()
 			opp.pew_final_contract_value = 950_000
 			opp.pew_project_start_date = add_days(today(), 15)
@@ -271,6 +273,18 @@ class TestOpportunityPipeline(IntegrationTestCase):
 		order = [df.fieldname for df in fields]
 		for df in fields[order.index("pew_stage4_section") : order.index("pew_project")]:
 			self.assertFalse(df.reqd or df.mandatory_depends_on, df.fieldname)
+
+	def test_loi_date_shows_only_when_loi_issued(self):
+		meta = frappe.get_meta("Opportunity")
+		self.assertEqual(meta.get_field(LOI_ISSUED_FIELD).fieldtype, "Check")
+		self.assertEqual(meta.get_field("pew_loi_date").depends_on, f"eval:doc.{LOI_ISSUED_FIELD}")
+
+		opp = self.advance(self.new_opportunity(), config.EVALUATION)
+		opp.set(LOI_ISSUED_FIELD, 1)
+		opp.pew_loi_date = today()
+		opp.save()
+		opp.reload()
+		self.assertEqual(opp.get(LOI_ISSUED_FIELD), 1)
 
 	def test_won_needs_nothing_after_qualification(self):
 		opp = self.advance(self.new_opportunity(), config.QUERIES)
