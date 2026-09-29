@@ -4,6 +4,7 @@ Run: bench --site <site> run-tests --module pew_customizations.tests.test_opport
 Everything is rolled back after the run; files are remote URLs so nothing is written to disk.
 """
 
+import re
 from unittest.mock import patch
 
 import frappe
@@ -194,6 +195,13 @@ class TestOpportunityPipeline(IntegrationTestCase):
 	def test_sales_stages_are_ordered(self):
 		for stage, order in config.SALES_STAGE_ORDER.items():
 			self.assertEqual(frappe.db.get_value("Sales Stage", stage, "pew_stage_order"), order)
+
+	def test_form_script_stage_list_matches_config(self):
+		# the progress bar and the dropdown sort use a copy (unsaved Opportunities have no __onload)
+		with open(frappe.get_app_path("pew_customizations", "public", "js", "opportunity.js")) as f:
+			block = re.search(r"const PEW_STAGES = \[(.*?)\];", f.read(), re.S)
+		self.assertTrue(block, "PEW_STAGES not found in opportunity.js")
+		self.assertEqual(re.findall(r'"([^"]+)"', block.group(1)), STAGES)
 
 	# stages and gates --------------------------------------------------------------------------
 

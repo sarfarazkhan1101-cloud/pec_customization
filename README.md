@@ -19,6 +19,9 @@ setup at the end.
 
 - **Stages**: 7 Sales Stages (Cold → Closure (Won)) ordered by `Sales Stage.pew_stage_order`;
   `Opportunity.pew_stage_index` fetches it and drives every section's `depends_on`.
+- **Progress bar**: chevron bar above the Opportunity tabs (`public/js/opportunity.js`) showing
+  `sales_stage`. Clicking a step saves the new stage through the same server gates as a Kanban drag;
+  its stage list mirrors `PIPELINE_STAGES` (checked by a test).
 - **Gates**: `pew_customizations/crm/config.py` (`EXIT_GATES`, `ENTRY_GATES`) is the single list of
   checklist items. The server enforces it on every forward move, including Kanban drags and API writes.
   Only leaving Inquiry / Tender and Qualification has checklist items; from Queries & Clarifications
