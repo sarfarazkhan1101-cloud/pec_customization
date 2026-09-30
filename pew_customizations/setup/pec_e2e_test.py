@@ -255,9 +255,8 @@ def _run_checks(check, created):
 	existing_notifs = frappe.get_all("Notification", filters={"name": ["in", notif_names], "enabled": 1})
 	check("PEC Revision notifications exist and are enabled", len(existing_notifs) == len(notif_names))
 
-	# 16. Task dependency: Task 2 of the template depends_on Task 1
-	task2 = frappe.get_doc("Task", task_names[1])
+	# 16. No Task dependencies: generated Tasks don't block one another
 	check(
-		"Generated Task 2 depends_on Task 1 (standard ERPNext dependency)",
-		bool(task2.depends_on) and task2.depends_on[0].task == task_names[0],
+		"Generated Tasks have no depends_on",
+		not frappe.get_all("Task Depends On", filters={"parent": ["in", task_names]}, limit=1),
 	)

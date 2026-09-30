@@ -15,7 +15,9 @@ class Scope(Document):
 		"""Generate this Scope's real Tasks from its scope_template (a standard
 		Project Template). Mirrors ERPNext's own Project-Template-to-Task logic
 		(erpnext.projects.doctype.project.project) but scoped to one Scope
-		instead of a whole Project, stamping `scope` on every created Task."""
+		instead of a whole Project, stamping `scope` on every created Task.
+		Template depends_on is deliberately not copied: PEW Tasks don't block
+		one another, so any Task can be completed on its own."""
 		if not self.scope_template:
 			frappe.throw(_("Select a Scope Template first."))
 
@@ -28,7 +30,6 @@ class Scope(Document):
 
 		start_date = self.start_date or today()
 		resync_naming_series(f"TASK-{today()[:4]}-")
-		template_task_map = {}
 		created = []
 
 		for row in template.tasks:
@@ -44,20 +45,7 @@ class Scope(Document):
 				start_date, (template_task.start or 0) + (template_task.duration or 0)
 			)
 			new_task.insert(ignore_permissions=True)
-			template_task_map[row.task] = new_task.name
 			created.append(new_task.name)
-
-		for row in template.tasks:
-			template_task = frappe.get_doc("Task", row.task)
-			if not template_task.depends_on:
-				continue
-			new_task = frappe.get_doc("Task", template_task_map[row.task])
-			for dep in template_task.depends_on:
-				mapped = template_task_map.get(dep.task)
-				if mapped:
-					new_task.append("depends_on", {"task": mapped})
-			if new_task.depends_on:
-				new_task.save(ignore_permissions=True)
 
 		frappe.msgprint(
 			_("Created {0} Task(s) from Scope Template {1}.").format(len(created), self.scope_template),

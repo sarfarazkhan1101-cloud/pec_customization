@@ -8,3 +8,4 @@ pew_customizations.patches.remove_dci_revision_doctype
 pew_customizations.patches.crm_v2_migrate_v1_opportunity_fields
 pew_customizations.patches.crm_v2_sales_stages
 pew_customizations.patches.crm_v2_loi_issued_flag
+pew_customizations.patches.remove_task_dependencies

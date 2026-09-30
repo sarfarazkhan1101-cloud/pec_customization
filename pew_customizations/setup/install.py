@@ -256,17 +256,17 @@ def create_project_approval_workflow():
 	doc.insert(ignore_permissions=True)
 
 
-def _get_or_create_template_task_chain(task_specs):
-	"""Get-or-create a sequential chain of is_template=1 Tasks matched by
-	subject, linked via depends_on. Reused across multiple Project Templates
-	so identically-named template tasks (e.g. the same 7-step checklist
-	shared by every discipline's Scope Template) aren't duplicated."""
+def _get_or_create_template_tasks(task_specs):
+	"""Get-or-create is_template=1 Tasks matched by subject. Reused across
+	multiple Project Templates so identically-named template tasks (e.g. the
+	same 7-step checklist shared by every discipline's Scope Template) aren't
+	duplicated. No depends_on between them: PEW completes Tasks in any order,
+	and ERPNext copies template dependencies onto every generated Task."""
 	from pew_customizations.utils import resync_naming_series
 
 	resync_naming_series(f"TASK-{frappe.utils.today()[:4]}-")
 
 	task_names = []
-	previous_task_name = None
 
 	for subject, start, duration in task_specs:
 		existing = frappe.db.exists("Task", {"subject": subject, "is_template": 1})
@@ -279,13 +279,10 @@ def _get_or_create_template_task_chain(task_specs):
 			task.status = "Template"
 			task.start = start
 			task.duration = duration
-			if previous_task_name:
-				task.append("depends_on", {"task": previous_task_name})
 			task.insert(ignore_permissions=True)
 			task_name = task.name
 
 		task_names.append(task_name)
-		previous_task_name = task_name
 
 	return task_names
 
@@ -302,7 +299,7 @@ def _create_project_template(template_name, task_names):
 
 
 def create_engineering_service_lifecycle_template():
-	task_names = _get_or_create_template_task_chain(LIFECYCLE_TASKS)
+	task_names = _get_or_create_template_tasks(LIFECYCLE_TASKS)
 	_create_project_template(PROJECT_TEMPLATE_NAME, task_names)
 
 
@@ -310,7 +307,7 @@ def create_scope_templates():
 	"""One Project Template per discipline, used as a Scope's `scope_template`
 	so Scope.create_tasks_from_template() can generate that Scope's Tasks."""
 	for template_name in SCOPE_TEMPLATE_NAMES.values():
-		task_names = _get_or_create_template_task_chain(SCOPE_TEMPLATE_TASKS)
+		task_names = _get_or_create_template_tasks(SCOPE_TEMPLATE_TASKS)
 		_create_project_template(template_name, task_names)
 
 

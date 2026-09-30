@@ -53,14 +53,8 @@
   "completed_on": null,
   "custom_discipline": "",
   "department": null,
-  "depends_on": [
-   {
-    "project": null,
-    "subject": "Input Data Received",
-    "task": "TASK-2026-00001"
-   }
-  ],
-  "depends_on_tasks": "TASK-2026-00001,",
+  "depends_on": [],
+  "depends_on_tasks": "",
   "description": null,
   "docstatus": 0,
   "doctype": "Task",
@@ -102,14 +96,8 @@
   "completed_on": null,
   "custom_discipline": "",
   "department": null,
-  "depends_on": [
-   {
-    "project": null,
-    "subject": "Design & Drafting",
-    "task": "TASK-2026-00002"
-   }
-  ],
-  "depends_on_tasks": "TASK-2026-00002,",
+  "depends_on": [],
+  "depends_on_tasks": "",
   "description": null,
   "docstatus": 0,
   "doctype": "Task",
@@ -151,14 +139,8 @@
   "completed_on": null,
   "custom_discipline": "",
   "department": null,
-  "depends_on": [
-   {
-    "project": null,
-    "subject": "Initial Client Submission",
-    "task": "TASK-2026-00003"
-   }
-  ],
-  "depends_on_tasks": "TASK-2026-00003,",
+  "depends_on": [],
+  "depends_on_tasks": "",
   "description": null,
   "docstatus": 0,
   "doctype": "Task",
@@ -200,14 +182,8 @@
   "completed_on": null,
   "custom_discipline": "",
   "department": null,
-  "depends_on": [
-   {
-    "project": null,
-    "subject": "Revision/Comment Cycle 1",
-    "task": "TASK-2026-00004"
-   }
-  ],
-  "depends_on_tasks": "TASK-2026-00004,",
+  "depends_on": [],
+  "depends_on_tasks": "",
   "description": null,
   "docstatus": 0,
   "doctype": "Task",
@@ -249,14 +225,8 @@
   "completed_on": null,
   "custom_discipline": "",
   "department": null,
-  "depends_on": [
-   {
-    "project": null,
-    "subject": "Revision 2",
-    "task": "TASK-2026-00005"
-   }
-  ],
-  "depends_on_tasks": "TASK-2026-00005,",
+  "depends_on": [],
+  "depends_on_tasks": "",
   "description": null,
   "docstatus": 0,
   "doctype": "Task",
@@ -298,14 +268,8 @@
   "completed_on": null,
   "custom_discipline": "",
   "department": null,
-  "depends_on": [
-   {
-    "project": null,
-    "subject": "Revision 3",
-    "task": "TASK-2026-00006"
-   }
-  ],
-  "depends_on_tasks": "TASK-2026-00006,",
+  "depends_on": [],
+  "depends_on_tasks": "",
   "description": null,
   "docstatus": 0,
   "doctype": "Task",
@@ -390,14 +354,8 @@
   "completed_on": null,
   "custom_discipline": "",
   "department": null,
-  "depends_on": [
-   {
-    "project": null,
-    "subject": "Input Data Collection",
-    "task": "TASK-2026-00008"
-   }
-  ],
-  "depends_on_tasks": "TASK-2026-00008,",
+  "depends_on": [],
+  "depends_on_tasks": "",
   "description": null,
   "docstatus": 0,
   "doctype": "Task",
@@ -439,14 +397,8 @@
   "completed_on": null,
   "custom_discipline": "",
   "department": null,
-  "depends_on": [
-   {
-    "project": null,
-    "subject": "Design",
-    "task": "TASK-2026-00009"
-   }
-  ],
-  "depends_on_tasks": "TASK-2026-00009,",
+  "depends_on": [],
+  "depends_on_tasks": "",
   "description": null,
   "docstatus": 0,
   "doctype": "Task",
@@ -488,14 +440,8 @@
   "completed_on": null,
   "custom_discipline": "",
   "department": null,
-  "depends_on": [
-   {
-    "project": null,
-    "subject": "Internal Check",
-    "task": "TASK-2026-00010"
-   }
-  ],
-  "depends_on_tasks": "TASK-2026-00010,",
+  "depends_on": [],
+  "depends_on_tasks": "",
   "description": null,
   "docstatus": 0,
   "doctype": "Task",
@@ -537,14 +483,8 @@
   "completed_on": null,
   "custom_discipline": "",
   "department": null,
-  "depends_on": [
-   {
-    "project": null,
-    "subject": "Engineering Review",
-    "task": "TASK-2026-00011"
-   }
-  ],
-  "depends_on_tasks": "TASK-2026-00011,",
+  "depends_on": [],
+  "depends_on_tasks": "",
   "description": null,
   "docstatus": 0,
   "doctype": "Task",
@@ -586,14 +526,8 @@
   "completed_on": null,
   "custom_discipline": "",
   "department": null,
-  "depends_on": [
-   {
-    "project": null,
-    "subject": "Drafting",
-    "task": "TASK-2026-00012"
-   }
-  ],
-  "depends_on_tasks": "TASK-2026-00012,",
+  "depends_on": [],
+  "depends_on_tasks": "",
   "description": null,
   "docstatus": 0,
   "doctype": "Task",
@@ -635,14 +569,8 @@
   "completed_on": null,
   "custom_discipline": "",
   "department": null,
-  "depends_on": [
-   {
-    "project": null,
-    "subject": "Final Review",
-    "task": "TASK-2026-00013"
-   }
-  ],
-  "depends_on_tasks": "TASK-2026-00013,",
+  "depends_on": [],
+  "depends_on_tasks": "",
   "description": null,
   "docstatus": 0,
   "doctype": "Task",
