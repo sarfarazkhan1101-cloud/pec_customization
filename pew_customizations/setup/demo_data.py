@@ -1,18 +1,15 @@
 """Idempotent PEC demo data: 2 Customers, 5 demo Users, 2 Projects, and on
 Project 001 a Piping + Mechanical Scope (Tasks generated from their Scope
-Templates) with 2 DCIs driven through the real revision Workflow end-to-end --
-one to Approved (R0 rejected, R1 approved) and one left mid-lifecycle
-(R0 rejected, R1 still Draft), matching the client's requested demo lifecycle.
+Templates). Each Task is one deliverable document: the first few carry a
+Document Number and a revision history, so the PEC DCI Report shows every
+Latest Status (approved, comments received, awaiting comments, not submitted).
 
 Run explicitly (not wired to after_install):
 	bench --site <site> execute pew_customizations.setup.demo_data.run
 """
 
 import frappe
-from frappe.model.workflow import apply_workflow
-from frappe.utils import add_months, today
-
-from pew_customizations.pec_revision_utils import create_new_revision
+from frappe.utils import add_days, add_months, today
 
 DEMO_CUSTOMERS = ["ABC Engineering Pvt Ltd", "XYZ Industrial Ltd"]
 
@@ -36,7 +33,7 @@ def run():
 	create_demo_customers()
 	create_demo_users()
 	projects = create_demo_projects()
-	create_scope_task_dci_lifecycle(projects[0])
+	create_scope_task_revision_lifecycle(projects[0])
 	frappe.db.commit()
 	print("PEC demo data created/verified.")
 
@@ -100,7 +97,7 @@ def create_demo_projects():
 	return created
 
 
-def create_scope_task_dci_lifecycle(project_name):
+def create_scope_task_revision_lifecycle(project_name):
 	scope1 = _get_or_create_scope(project_name, "Piping Scope", "Piping Layout", "PEC Piping Scope Template")
 	scope2 = _get_or_create_scope(
 		project_name, "Mechanical Scope", "Mechanical Calculation", "PEC Mechanical Scope Template"
@@ -109,7 +106,7 @@ def create_scope_task_dci_lifecycle(project_name):
 	tasks1 = _ensure_tasks_from_template(scope1)
 	tasks2 = _ensure_tasks_from_template(scope2)
 
-	if len(tasks1) < 2:
+	if len(tasks1) < 3 or not tasks2:
 		return
 
 	# Realistic progress on the first few tasks of each scope, so Scope.progress
@@ -119,11 +116,40 @@ def create_scope_task_dci_lifecycle(project_name):
 	_seed_task_progress(tasks1, [100, 70, 30])
 	_seed_task_progress(tasks2, [100, 40])
 
-	dci1 = _get_or_create_dci(project_name, scope1, tasks1[0], "Piping Layout Drawing - Sheet 1")
-	dci2 = _get_or_create_dci(project_name, scope1, tasks1[1], "Piping Isometric Drawing - Sheet 1")
+	_set_document_numbers(tasks1, "DEMO-PIP")
+	_set_document_numbers(tasks2, "DEMO-MEC")
 
-	_drive_to_approved(dci1)
-	_drive_to_revision_required(dci2, open_next_revision=True)
+	# (submitted days ago, answered days ago, Approval Code) per revision, R0 first.
+	# The codes are the Project's default set: 1 closes the document, 3 = revise and resubmit.
+	_seed_revisions(tasks1[0], [(30, 24, "3"), (18, 12, "1")])  # approved at R1
+	_seed_revisions(tasks1[1], [(21, 15, "3"), (6, None, None)])  # R1 awaiting comments
+	_seed_revisions(tasks1[2], [(9, 4, "2")])  # comments received on R0
+	_seed_revisions(tasks2[0], [(5, None, None)])  # R0 awaiting comments
+
+
+def _set_document_numbers(task_names, prefix):
+	for number, task_name in enumerate(task_names, start=1):
+		if not frappe.db.get_value("Task", task_name, "pec_document_number"):
+			frappe.db.set_value("Task", task_name, "pec_document_number", f"{prefix}-{number:03d}")
+
+
+def _seed_revisions(task_name, revisions):
+	# Task's validate hook (projects/task_revisions.py) numbers the rows R0, R1 ...
+	# and sets the Task's Latest Status from the last one.
+	task = frappe.get_doc("Task", task_name)
+	if task.pec_revisions:
+		return  # already seeded on a previous run, or copied from an old DCI
+
+	for submitted, answered, code in revisions:
+		task.append(
+			"pec_revisions",
+			{
+				"submission_date": add_days(today(), -submitted),
+				"received_date": add_days(today(), -answered) if answered is not None else None,
+				"approval_code": code,
+			},
+		)
+	task.save(ignore_permissions=True)
 
 
 def _seed_task_progress(task_names, percentages):
@@ -172,80 +198,3 @@ def _ensure_tasks_from_template(scope_name):
 		assignee = ENGINEER if idx < 4 else DRAUGHTSMAN
 		assign_to_add({"doctype": "Task", "name": task_name, "assign_to": [assignee]})
 	return created
-
-
-def _get_or_create_dci(project, scope, task, title):
-	existing = frappe.db.get_value("DCI", {"project": project, "task": task, "document_title": title})
-	if existing:
-		return existing
-
-	dci = frappe.new_doc("DCI")
-	dci.document_title = title
-	dci.document_category = "Piping Layout Drawing"
-	dci.project = project
-	dci.scope = scope
-	dci.task = task
-	dci.responsible_engineer = ENGINEER
-	dci.assigned_to = DRAUGHTSMAN
-	dci.insert(ignore_permissions=True)
-	return dci.name
-
-
-def _new_revision_with_stage(dci, comments=None):
-	if frappe.db.exists("PEC Revision", {"dci": dci, "workflow_state": "Draft"}):
-		return frappe.get_doc("PEC Revision", frappe.db.get_value("PEC Revision", {"dci": dci, "workflow_state": "Draft"}))
-
-	name = create_new_revision(dci)
-	revision = frappe.get_doc("PEC Revision", name)
-	revision.submitted_by = ENGINEER
-	revision.append("review_stages", {"sequence": 1, "stage_name": "Engineering Review", "reviewer": REVIEWER})
-	if comments:
-		revision.overall_comments = comments
-	revision.save(ignore_permissions=True)
-	return revision
-
-
-def _drive_to_approved(dci):
-	if frappe.db.get_value("DCI", dci, "overall_status") == "Approved":
-		return
-
-	r0 = _new_revision_with_stage(dci, "Initial issue for review.")
-	if r0.workflow_state == "Draft":
-		r0 = apply_workflow(r0, "Submit for Review")
-	if r0.workflow_state == "Submitted":
-		r0 = apply_workflow(r0, "Start Review")
-	if r0.workflow_state == "Under Review":
-		r0.mark_stage_reviewed(
-			r0.review_stages[0].name, "Rejected", "Pipe schedule missing on sheet 1, please add and resubmit."
-		)
-
-	r1 = _new_revision_with_stage(dci, "Corrections incorporated: pipe schedule added to sheet 1.")
-	if r1.workflow_state == "Draft":
-		r1 = apply_workflow(r1, "Submit for Review")
-	if r1.workflow_state == "Submitted":
-		r1 = apply_workflow(r1, "Start Review")
-	if r1.workflow_state == "Under Review":
-		r1.reload()
-		r1.mark_stage_reviewed(r1.review_stages[0].name, "Approved", "Looks good, approved.")
-
-
-def _drive_to_revision_required(dci, open_next_revision=False):
-	if frappe.db.exists("PEC Revision", {"dci": dci}):
-		r0 = frappe.get_doc(
-			"PEC Revision", frappe.db.get_value("PEC Revision", {"dci": dci, "revision_no": 0})
-		)
-	else:
-		r0 = _new_revision_with_stage(dci, "Initial issue for review.")
-
-	if r0.workflow_state == "Draft":
-		r0 = apply_workflow(r0, "Submit for Review")
-	if r0.workflow_state == "Submitted":
-		r0 = apply_workflow(r0, "Start Review")
-	if r0.workflow_state == "Under Review":
-		r0.mark_stage_reviewed(
-			r0.review_stages[0].name, "Rejected", "Isometric numbering is inconsistent with the layout drawing, please revise."
-		)
-
-	if open_next_revision and not frappe.db.exists("PEC Revision", {"dci": dci, "revision_no": 1}):
-		r1_name = create_new_revision(dci)  # left in Draft -> represents "In Progress"
-		frappe.db.set_value("PEC Revision", r1_name, "submitted_by", DRAUGHTSMAN)

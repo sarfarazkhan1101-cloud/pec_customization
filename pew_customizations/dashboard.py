@@ -8,11 +8,6 @@ def get_project_dashboard_data(data):
 	return data
 
 
-def get_task_dashboard_data(data):
-	data.setdefault("transactions", []).append({"label": "PEC", "items": ["DCI"]})
-	return data
-
-
 def get_opportunity_dashboard_data(data):
 	# Project links back to the won Opportunity through `source_opportunity`
 	data.setdefault("non_standard_fieldnames", {})["Project"] = "source_opportunity"

@@ -73,6 +73,8 @@ def run():
 	create_project_approval_workflow()
 	create_engineering_service_lifecycle_template()
 	create_pec_roles()
+	create_task_permissions()
+	create_task_search_fields()
 	create_project_naming_series_option()
 	create_pec_revision_workflow()
 	create_pec_notifications()
@@ -179,8 +181,36 @@ def get_custom_fields():
 				"fieldtype": "Text Editor",
 				"insert_after": "project_input",
 			},
+			{
+				"fieldname": "pec_approval_codes_section",
+				"label": "Approval Codes",
+				"fieldtype": "Section Break",
+				"insert_after": "design_basis",
+			},
+			{
+				"fieldname": "pec_approval_codes",
+				"label": "Approval Codes",
+				"fieldtype": "Table",
+				"options": "PEC Approval Code",
+				"insert_after": "pec_approval_codes_section",
+				"description": (
+					"The client's possible answers to a submitted document. "
+					"Every Task revision of this Project picks its Approval Code from this list."
+				),
+			},
 		],
 		"Task": [
+			{
+				"fieldname": "pec_document_number",
+				"label": "Document Number",
+				"fieldtype": "Data",
+				"insert_after": "subject",
+				"in_list_view": 1,
+				"in_standard_filter": 1,
+				"search_index": 1,
+				"no_copy": 1,
+				"description": "The client's Task / Document Number, e.g. ABC123-PIP-001. The Subject is the Document Name.",
+			},
 			{
 				"fieldname": "custom_discipline",
 				"label": "Discipline",
@@ -204,8 +234,99 @@ def get_custom_fields():
 				"options": "User",
 				"insert_after": "custom_discipline",
 			},
+			# Revision tracker (R0 - R10), after the standard progress fields. Filled in on the Task
+			# form and validated by projects/task_revisions.py.
+			{
+				"fieldname": "pec_revision_section",
+				"label": "Revision Tracker",
+				"fieldtype": "Section Break",
+				"insert_after": "is_milestone",
+				"depends_on": "eval:!doc.is_template",
+			},
+			{
+				"fieldname": "pec_revisions",
+				"label": "Revisions (R0 - R10)",
+				"fieldtype": "Table",
+				"options": "PEC Task Revision",
+				"insert_after": "pec_revision_section",
+				"no_copy": 1,
+			},
+			{
+				"fieldname": "pec_latest_section",
+				"fieldtype": "Section Break",
+				"insert_after": "pec_revisions",
+				"depends_on": "eval:!doc.is_template",
+				"hide_border": 1,
+			},
+			_latest_field("pec_latest_revision", "Latest Revision", "Data", "pec_latest_section"),
+			_latest_field("pec_latest_code", "Latest Code", "Data", "pec_latest_revision"),
+			{
+				"fieldname": "pec_latest_column_1",
+				"fieldtype": "Column Break",
+				"insert_after": "pec_latest_code",
+			},
+			_latest_field(
+				"pec_latest_submission_date", "Latest Submission Date", "Date", "pec_latest_column_1"
+			),
+			_latest_field(
+				"pec_latest_received_date", "Latest Received Date", "Date", "pec_latest_submission_date"
+			),
+			{
+				"fieldname": "pec_latest_column_2",
+				"fieldtype": "Column Break",
+				"insert_after": "pec_latest_received_date",
+			},
+			{
+				**_latest_field("pec_latest_status", "Latest Status", "Data", "pec_latest_column_2"),
+				"in_standard_filter": 1,
+			},
 		],
 	}
+
+
+def _latest_field(fieldname, label, fieldtype, insert_after):
+	"""Read-only summary of a Task's latest revision, set on save (projects/task_revisions.py)."""
+	return {
+		"fieldname": fieldname,
+		"label": label,
+		"fieldtype": fieldtype,
+		"insert_after": insert_after,
+		"read_only": 1,
+		"no_copy": 1,
+	}
+
+
+# Task rights of the PEC roles, added to ERPNext's own (Projects User). `report` opens the PEC DCI
+# Report and `export` exports it: Draftsman and Associate can view the DCI but not export it.
+TASK_PERMISSION_TYPES = ("read", "write", "create", "delete", "report", "export", "print", "email", "share")
+TASK_PERMISSIONS = {
+	"Projects Manager": TASK_PERMISSION_TYPES,
+	"PEC Administrator": TASK_PERMISSION_TYPES,
+	"Engineer": ("read", "write", "report", "export", "print", "email"),
+	"Draftsman": ("read", "write", "report", "print"),
+	"Associate": ("read", "report", "print"),
+}
+TASK_SEARCH_FIELDS = "subject,pec_document_number"
+
+
+def create_task_permissions():
+	"""The first rule copies Task's standard permissions into Custom DocPerm, which then replaces
+	them for this doctype (exported as fixtures, same as Opportunity's in crm/setup.py)."""
+	from frappe.permissions import add_permission, update_permission_property
+
+	for role, rights in TASK_PERMISSIONS.items():
+		if not frappe.db.exists("Custom DocPerm", {"parent": "Task", "role": role, "permlevel": 0}):
+			add_permission("Task", role)
+		for ptype in TASK_PERMISSION_TYPES:
+			update_permission_property("Task", role, 0, ptype, int(ptype in rights))
+
+
+def create_task_search_fields():
+	"""Tasks are found by Document Number as well as by Subject (search bar, Link fields)."""
+	from frappe.custom.doctype.property_setter.property_setter import make_property_setter
+
+	if frappe.db.get_value("Property Setter", "Task-main-search_fields", "value") != TASK_SEARCH_FIELDS:
+		make_property_setter("Task", None, "search_fields", TASK_SEARCH_FIELDS, "Data", for_doctype=True)
 
 
 def create_market_segments():

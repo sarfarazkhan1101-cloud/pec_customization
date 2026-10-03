@@ -1,17 +1,20 @@
-"""End-to-end test for the PEC (Project -> Scope -> Task -> Revision) process
-(check()/cleanup() pattern). The tender pipeline is covered by tests/test_opportunity_pipeline.py.
+"""End-to-end test for the PEC (Project -> Scope -> Task -> revisions R0 - R10 -> DCI report)
+process (check()/cleanup() pattern). The rules are covered in detail by tests/test_task_revisions.py
+and the tender pipeline by tests/test_opportunity_pipeline.py.
 
 Run: bench --site <site> execute pew_customizations.setup.pec_e2e_test.run
 """
 
 import frappe
-from frappe.model.workflow import apply_workflow
+from frappe.utils import add_days, today
+
+from pew_customizations.pew_customizations.report.pec_dci_report.pec_dci_report import get_dci_data
 
 
 def run():
 	frappe.set_user("Administrator")
 	results = []
-	created = {"project": None, "scope": None, "dci": None, "revisions": [], "users": [], "tasks": []}
+	created = {"project": None, "scope": None, "users": [], "tasks": []}
 
 	def check(label, condition):
 		status = "PASS" if condition else "FAIL"
@@ -30,17 +33,6 @@ def run():
 
 
 def _cleanup(created):
-	for name in created.get("revisions", []):
-		if frappe.db.exists("PEC Revision", name):
-			doc = frappe.get_doc("PEC Revision", name)
-			if doc.docstatus == 1:
-				doc.cancel()
-			frappe.delete_doc("PEC Revision", name, ignore_permissions=True, force=True)
-	if created.get("dci") and frappe.db.exists("DCI", created["dci"]):
-		doc = frappe.get_doc("DCI", created["dci"])
-		if doc.docstatus == 1:
-			doc.cancel()
-		frappe.delete_doc("DCI", created["dci"], ignore_permissions=True, force=True)
 	for name in created.get("tasks", []):
 		if frappe.db.exists("Task", name):
 			frappe.delete_doc("Task", name, ignore_permissions=True, force=True)
@@ -127,136 +119,127 @@ def _run_checks(check, created):
 	first_task.save(ignore_permissions=True)
 	check("Task progress updated", frappe.db.get_value("Task", first_task.name, "progress") == 40)
 
-	# 7. Create DCI (document register) for this Task
-	dci = frappe.new_doc("DCI")
-	dci.document_title = "E2E Piping Layout Drawing"
-	dci.document_category = "Piping Layout Drawing"
-	dci.project = project.name
-	dci.scope = scope.name
-	dci.task = first_task.name
-	dci.responsible_engineer = test_engineer
-	dci.insert(ignore_permissions=True)
-	created["dci"] = dci.name
-	check("DCI created and traceable to Project/Scope/Task", dci.project == project.name and dci.scope == scope.name and dci.task == first_task.name)
-
-	# 8. Create Revision 0 (R0) and submit it for review
-	from pew_customizations.pec_revision_utils import create_new_revision
-
-	r0_name = create_new_revision(dci.name)
-	created["revisions"].append(r0_name)
-	r0 = frappe.get_doc("PEC Revision", r0_name)
-	check("R0 created with revision_no 0 and label R0", r0.revision_no == 0 and r0.revision_label == "R0")
-
-	r0.append("review_stages", {"sequence": 1, "stage_name": "Engineering Review", "reviewer": "Administrator"})
-	r0.save(ignore_permissions=True)
-
-	r0 = apply_workflow(r0, "Submit for Review")
-	check("R0 moved to Submitted", r0.workflow_state == "Submitted")
-
-	r0 = apply_workflow(r0, "Start Review")
-	check("R0 moved to Under Review", r0.workflow_state == "Under Review")
-
-	# 9. Add review comments and reject -> Revision Required
-	r0.mark_stage_reviewed(r0.review_stages[0].name, "Rejected", "Please correct the pipe schedule.")
-	r0.reload()
-	check("R0 moved to Revision Required after rejection", r0.workflow_state == "Revision Required")
-	check("R0 review comment preserved", r0.review_stages[0].comments == "Please correct the pipe schedule.")
-
-	# 10. A second active revision cannot be opened while none is required yet
-	# (guard check: create_new_revision blocked while an active revision exists)
-	dci.reload()
-	check("DCI current_revision rolled up to R0", dci.current_revision == "R0")
-	check("DCI overall_status rolled up to Revision Required", dci.overall_status == "Revision Required")
-
-	# 11. Create Revision 1 (R1)
-	r1_name = create_new_revision(dci.name)
-	created["revisions"].append(r1_name)
-	r1 = frappe.get_doc("PEC Revision", r1_name)
-	check("R1 created with revision_no 1 and previous_revision -> R0", r1.revision_no == 1 and r1.previous_revision == r0_name)
-
-	r1.append("review_stages", {"sequence": 1, "stage_name": "Engineering Review", "reviewer": "Administrator"})
-	r1.overall_comments = "Corrections incorporated."
-	r1.save(ignore_permissions=True)
-
-	# A second active revision is now blocked (R1 is active)
-	blocked_duplicate = False
-	try:
-		create_new_revision(dci.name)
-	except frappe.ValidationError:
-		blocked_duplicate = True
-	check("Opening a second active revision while R1 is open is blocked", blocked_duplicate)
-
-	r1 = apply_workflow(r1, "Submit for Review")
-	r1 = apply_workflow(r1, "Start Review")
-	r1.mark_stage_reviewed(r1.review_stages[0].name, "Approved", "Looks good.")
-	r1.reload()
-	check("R1 approved (docstatus submitted)", r1.workflow_state == "Approved" and r1.docstatus == 1)
-
-	# 12. Verify R0's history is completely unchanged after R1's lifecycle
-	r0_after = frappe.get_doc("PEC Revision", r0_name)
+	# 7. A new Project carries the default Approval Codes; code 1 closes a document
+	project.reload()
 	check(
-		"R0 history unchanged after R1 was created/approved",
-		r0_after.workflow_state == "Revision Required"
-		and r0_after.review_stages[0].status == "Rejected"
-		and r0_after.review_stages[0].comments == "Please correct the pipe schedule.",
+		"Project pre-filled with the default Approval Codes",
+		[(row.code, row.closes_document) for row in project.pec_approval_codes]
+		== [("1", 1), ("2", 0), ("3", 0), ("4", 0)],
 	)
 
-	# 13. DCI roll-up now reflects R1 (latest), not R0
-	dci.reload()
-	check("DCI current_revision rolled up to R1", dci.current_revision == "R1")
-	check("DCI overall_status rolled up to Approved", dci.overall_status == "Approved")
+	# 8. The Task is the deliverable document: number it and submit R0
+	first_task.reload()
+	first_task.pec_document_number = "E2E-PIP-001"
+	first_task.append("pec_revisions", {"submission_date": add_days(today(), -7)})
+	first_task.save(ignore_permissions=True)
+	check("R0 numbered from the row order", first_task.pec_revisions[0].revision == "R0")
+	check(
+		"R0 submitted: Latest Status is awaiting comments",
+		first_task.pec_latest_status == "R0 Submitted – Awaiting Comments",  # noqa: RUF001
+	)
 
-	# 14. Permission: a user who is NOT the stage reviewer cannot action it
-	test_outsider = "pec_e2e_outsider@example.com"
-	if not frappe.db.exists("User", test_outsider):
+	# 9. R1 cannot be opened before R0 has an Approval Code
+	first_task.append("pec_revisions", {"submission_date": today()})
+	check("R1 before R0 has a code is refused", _is_refused(first_task))
+
+	# 10. The client answers R0 with code 3 (revise and resubmit), then R1 is submitted
+	first_task.reload()
+	first_task.pec_revisions[0].update({"approval_code": "3", "received_date": add_days(today(), -3)})
+	first_task.save(ignore_permissions=True)
+	check("R0 code 3 received", first_task.pec_latest_status == "R0 Code 3 Received")
+	check(
+		"Code description filled from the Project",
+		first_task.pec_revisions[0].code_description == "Revise and resubmit",
+	)
+
+	first_task.append("pec_revisions", {"submission_date": today()})
+	first_task.save(ignore_permissions=True)
+	check(
+		"R1 submitted after R0 was answered",
+		first_task.pec_latest_status == "R1 Submitted – Awaiting Comments",  # noqa: RUF001
+	)
+
+	# 11. R0 is locked now that R1 exists: an Engineer cannot change it, an administrator can
+	frappe.set_user(test_engineer)
+	as_engineer = frappe.get_doc("Task", first_task.name)
+	as_engineer.pec_revisions[0].notes = "changed after R1 was submitted"
+	check("An Engineer cannot edit R0 once R1 exists", _is_refused(as_engineer))
+
+	as_engineer.reload()
+	as_engineer.pec_revisions[1].update({"approval_code": "1", "received_date": today()})
+	as_engineer.save()
+	check(
+		"An Engineer can update the latest revision", as_engineer.pec_latest_status == "Approved (R1, Code 1)"
+	)
+	frappe.set_user("Administrator")
+
+	first_task.reload()
+	first_task.pec_revisions[0].notes = "corrected by the administrator"
+	first_task.save(ignore_permissions=True)
+	check(
+		"An administrator can still edit R0",
+		first_task.pec_revisions[0].notes == "corrected by the administrator",
+	)
+
+	# 12. Revisions leave the Task's own status and progress alone
+	check(
+		"Revisions did not change Task status or progress",
+		first_task.status == "Working" and first_task.progress == 40,
+	)
+
+	# 13. At most 11 revisions (R0 - R10)
+	second_task = frappe.get_doc("Task", task_names[1])
+	for _n in range(11):
+		second_task.append("pec_revisions", {"submission_date": today(), "approval_code": "3"})
+	second_task.save(ignore_permissions=True)
+	check("R0 to R10 accepted", second_task.pec_revisions[-1].revision == "R10")
+	second_task.append("pec_revisions", {"submission_date": today()})
+	check("A 12th revision (R11) is refused", _is_refused(second_task))
+
+	# 14. The DCI is a report over the Project's Tasks
+	rows = {row.task: row for row in get_dci_data({"project": project.name}).rows}
+	row = rows[first_task.name]
+	check("DCI report lists every Task of the Project", len(rows) == 7)
+	check(
+		"DCI report row shows the document and its revisions",
+		row.document_number == "E2E-PIP-001" and row.r0_code == "3" and row.r1_code == "1",
+	)
+	check("DCI report Latest Status matches the Task", row.latest_status == "Approved (R1, Code 1)")
+	check("Unsubmitted Tasks show as Not Submitted", rows[task_names[2]].latest_status == "Not Submitted")
+
+	# 15. Engineers may export the DCI; Draftsmen may view it but not export it
+	test_draftsman = "pec_e2e_draftsman@example.com"
+	if not frappe.db.exists("User", test_draftsman):
 		frappe.get_doc(
 			{
 				"doctype": "User",
-				"email": test_outsider,
-				"first_name": "E2E Outsider",
+				"email": test_draftsman,
+				"first_name": "E2E Draftsman",
 				"send_welcome_email": 0,
-				"roles": [{"role": "Engineer"}],
+				"roles": [{"role": "Draftsman"}],
 			}
 		).insert(ignore_permissions=True)
-	created["users"].append(test_outsider)
+	created["users"].append(test_draftsman)
 
-	dci2 = frappe.new_doc("DCI")
-	dci2.document_title = "E2E Piping Layout Drawing 2"
-	dci2.document_category = "Piping Layout Drawing"
-	dci2.project = project.name
-	dci2.scope = scope.name
-	dci2.task = first_task.name
-	dci2.insert(ignore_permissions=True)
-	created["dci"] = None  # tracked separately below for cleanup
-
-	r2_name = create_new_revision(dci2.name)
-	created["revisions"].append(r2_name)
-	r2 = frappe.get_doc("PEC Revision", r2_name)
-	r2.append("review_stages", {"sequence": 1, "stage_name": "Engineering Review", "reviewer": test_engineer})
-	r2.save(ignore_permissions=True)
-	r2 = apply_workflow(r2, "Submit for Review")
-	r2 = apply_workflow(r2, "Start Review")
-
-	frappe.set_user(test_outsider)
-	denied = False
-	try:
-		r2.mark_stage_reviewed(r2.review_stages[0].name, "Approved", "Trying to approve without being the reviewer.")
-	except frappe.ValidationError:
-		denied = True
+	frappe.set_user(test_engineer)
+	check("Engineer can export Tasks (DCI report)", bool(frappe.permissions.can_export("Task")))
+	frappe.set_user(test_draftsman)
+	check(
+		"Draftsman can view the DCI report but not export it",
+		frappe.has_permission("Task", "report") and not frappe.permissions.can_export("Task"),
+	)
 	frappe.set_user("Administrator")
-	check("A non-reviewer user is denied actioning the review stage", denied)
-
-	frappe.delete_doc("PEC Revision", r2_name, ignore_permissions=True, force=True)
-	frappe.delete_doc("DCI", dci2.name, ignore_permissions=True, force=True)
-	created["revisions"].remove(r2_name)
-
-	# 15. Notifications: PEC Revision workflow-state Notifications exist and are enabled
-	notif_names = ["PEC Revision Sent for Review", "PEC Revision Requires Changes", "PEC Revision Approved"]
-	existing_notifs = frappe.get_all("Notification", filters={"name": ["in", notif_names], "enabled": 1})
-	check("PEC Revision notifications exist and are enabled", len(existing_notifs) == len(notif_names))
 
 	# 16. No Task dependencies: generated Tasks don't block one another
 	check(
 		"Generated Tasks have no depends_on",
 		not frappe.get_all("Task Depends On", filters={"parent": ["in", task_names]}, limit=1),
 	)
+
+
+def _is_refused(doc):
+	try:
+		doc.save(ignore_permissions=True)
+	except frappe.ValidationError:
+		return True
+	return False

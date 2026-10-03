@@ -48,7 +48,9 @@ fixtures = [
 	{"dt": "Custom Field", "filters": [["name", "in", _pec_fields() + _crm_fields()]]},
 	{
 		"dt": "Property Setter",
-		"filters": [["name", "in", ["Project-naming_series-options", *_crm_ps()]]],
+		"filters": [
+			["name", "in", ["Project-naming_series-options", "Task-main-search_fields", *_crm_ps()]]
+		],
 	},
 	{"dt": "Role", "filters": [["name", "in", PEC_ROLES]]},
 	{"dt": "Sales Stage", "filters": [["name", "in", _crm.PIPELINE_STAGES]]},
@@ -62,8 +64,9 @@ fixtures = [
 	},
 	{"dt": "Project Template", "filters": [["name", "in", _ALL_PROJECT_TEMPLATE_NAMES]]},
 	{"dt": "UTM Source", "filters": [["name", "in", _crm.LEAD_SOURCES]]},
-	# Opportunity's permissions incl. level 1 (Work Order / Client PO) for Sales Manager
-	{"dt": "Custom DocPerm", "filters": [["parent", "=", "Opportunity"]]},
+	# Opportunity's permissions incl. level 1 (Work Order / Client PO) for Sales Manager, and Task's
+	# incl. the PEC roles (who may export the DCI report)
+	{"dt": "Custom DocPerm", "filters": [["parent", "in", ["Opportunity", "Task"]]]},
 ]
 
 # Document Events
@@ -75,6 +78,7 @@ doc_events = {
 		"on_cancel": "pew_customizations.pec_revision_utils.sync_dci_rollup",
 	},
 	"Task": {
+		"validate": "pew_customizations.projects.task_revisions.validate",
 		"on_update": "pew_customizations.utils.sync_scope_from_tasks",
 		"on_trash": "pew_customizations.utils.sync_scope_from_tasks",
 	},
@@ -96,7 +100,12 @@ doc_events = {
 		"before_insert": "pew_customizations.crm.communication.link_by_subject_tag",
 	},
 	"Project": {
-		"on_update": "pew_customizations.projects.project_team.sync_team_access",
+		"before_insert": "pew_customizations.projects.approval_codes.set_default_codes",
+		"validate": "pew_customizations.projects.approval_codes.validate_codes",
+		"on_update": [
+			"pew_customizations.projects.project_team.sync_team_access",
+			"pew_customizations.projects.approval_codes.refresh_task_status",
+		],
 		"on_trash": "pew_customizations.projects.project_team.revoke_all",
 	},
 }
@@ -112,7 +121,6 @@ after_migrate = ["pew_customizations.crm.setup.after_migrate"]
 # ----------------------
 override_doctype_dashboards = {
 	"Project": "pew_customizations.dashboard.get_project_dashboard_data",
-	"Task": "pew_customizations.dashboard.get_task_dashboard_data",
 	"Opportunity": "pew_customizations.dashboard.get_opportunity_dashboard_data",
 }
 
@@ -125,6 +133,7 @@ doctype_js = {
 	"Opportunity": "public/js/opportunity.js",
 	"Customer": "public/js/customer.js",
 	"Lead": "public/js/lead.js",
+	"Task": "public/js/task.js",
 }
 
 doctype_list_js = {

@@ -138,14 +138,9 @@
    "group": "PEC",
    "link_doctype": "Task",
    "link_fieldname": "scope"
-  },
-  {
-   "group": "PEC",
-   "link_doctype": "DCI",
-   "link_fieldname": "scope"
   }
  ],
- "modified": "2026-09-11 00:00:00.000000",
+ "modified": "2026-10-02 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "PEW Customizations",
  "name": "Scope",
