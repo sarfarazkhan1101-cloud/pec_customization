@@ -74,6 +74,7 @@ def run():
 	create_engineering_service_lifecycle_template()
 	create_pec_roles()
 	create_task_permissions()
+	create_scope_template_permissions()
 	create_task_search_fields()
 	create_project_naming_series_option()
 	create_pec_revision_workflow()
@@ -319,6 +320,21 @@ def create_task_permissions():
 			add_permission("Task", role)
 		for ptype in TASK_PERMISSION_TYPES:
 			update_permission_property("Task", role, 0, ptype, int(ptype in rights))
+
+
+# A Scope Template is a standard Project Template, which ERPNext opens to System Managers only.
+# The roles that create Scopes need to read it, otherwise the Scope Template field refuses them.
+SCOPE_TEMPLATE_ROLES = ("Projects Manager", "Engineer")
+
+
+def create_scope_template_permissions():
+	"""Read-only. As for Task, the first rule copies the standard permissions into Custom DocPerm."""
+	from frappe.permissions import add_permission
+
+	for role in SCOPE_TEMPLATE_ROLES:
+		rule = {"parent": "Project Template", "role": role, "permlevel": 0}
+		if not frappe.db.exists("Custom DocPerm", rule):
+			add_permission("Project Template", role)
 
 
 def create_task_search_fields():

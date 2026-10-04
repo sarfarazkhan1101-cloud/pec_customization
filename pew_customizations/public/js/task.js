@@ -4,6 +4,11 @@
 const PEC_MAX_REVISIONS = 11;
 
 frappe.ui.form.on("Task", {
+	setup(frm) {
+		// a Task belongs to the Project of its Scope (checked again in utils.validate_task_scope)
+		frm.set_query("scope", () => (frm.doc.project ? { filters: { project: frm.doc.project } } : {}));
+	},
+
 	refresh(frm) {
 		pec_load_approval_codes(frm);
 		pec_toggle_add_row(frm);

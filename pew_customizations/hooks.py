@@ -66,7 +66,7 @@ fixtures = [
 	{"dt": "UTM Source", "filters": [["name", "in", _crm.LEAD_SOURCES]]},
 	# Opportunity's permissions incl. level 1 (Work Order / Client PO) for Sales Manager, and Task's
 	# incl. the PEC roles (who may export the DCI report)
-	{"dt": "Custom DocPerm", "filters": [["parent", "in", ["Opportunity", "Task"]]]},
+	{"dt": "Custom DocPerm", "filters": [["parent", "in", ["Opportunity", "Task", "Project Template"]]]},
 ]
 
 # Document Events
@@ -77,14 +77,19 @@ doc_events = {
 		"on_submit": "pew_customizations.pec_revision_utils.sync_dci_rollup",
 		"on_cancel": "pew_customizations.pec_revision_utils.sync_dci_rollup",
 	},
+	# The roll-up runs after_delete, not on_trash: the deleted record must be gone from the count, and
+	# for Task it has to come after ERPNext's own Project update (Task.after_delete).
 	"Task": {
-		"validate": "pew_customizations.projects.task_revisions.validate",
+		"validate": [
+			"pew_customizations.utils.validate_task_scope",
+			"pew_customizations.projects.task_revisions.validate",
+		],
 		"on_update": "pew_customizations.utils.sync_scope_from_tasks",
-		"on_trash": "pew_customizations.utils.sync_scope_from_tasks",
+		"after_delete": "pew_customizations.utils.sync_scope_from_tasks",
 	},
 	"Scope": {
 		"on_update": "pew_customizations.utils.sync_project_from_scopes",
-		"on_trash": "pew_customizations.utils.sync_project_from_scopes",
+		"after_delete": "pew_customizations.utils.sync_project_from_scopes",
 	},
 	"Opportunity": {
 		"onload": "pew_customizations.crm.opportunity.onload",
@@ -101,7 +106,10 @@ doc_events = {
 	},
 	"Project": {
 		"before_insert": "pew_customizations.projects.approval_codes.set_default_codes",
-		"validate": "pew_customizations.projects.approval_codes.validate_codes",
+		"validate": [
+			"pew_customizations.projects.approval_codes.validate_codes",
+			"pew_customizations.utils.validate_project_status",
+		],
 		"on_update": [
 			"pew_customizations.projects.project_team.sync_team_access",
 			"pew_customizations.projects.approval_codes.refresh_task_status",

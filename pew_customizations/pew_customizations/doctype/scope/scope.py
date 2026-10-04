@@ -10,6 +10,15 @@ from pew_customizations.utils import resync_naming_series
 
 
 class Scope(Document):
+	def validate(self):
+		# its Tasks carry the Project too (utils.validate_task_scope)
+		if (
+			not self.is_new()
+			and self.has_value_changed("project")
+			and frappe.db.exists("Task", {"scope": self.name})
+		):
+			frappe.throw(_("The Project of a Scope cannot be changed once the Scope has Tasks."))
+
 	@frappe.whitelist()
 	def create_tasks_from_template(self):
 		"""Generate this Scope's real Tasks from its scope_template (a standard
@@ -18,6 +27,9 @@ class Scope(Document):
 		instead of a whole Project, stamping `scope` on every created Task.
 		Template depends_on is deliberately not copied: PEW Tasks don't block
 		one another, so any Task can be completed on its own."""
+		# the Tasks are inserted without a Task permission check, so the Scope's own right decides
+		self.check_permission("write")
+
 		if not self.scope_template:
 			frappe.throw(_("Select a Scope Template first."))
 
