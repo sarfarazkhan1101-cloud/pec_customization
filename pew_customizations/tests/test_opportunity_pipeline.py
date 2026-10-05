@@ -472,6 +472,53 @@ class TestOpportunityPipeline(IntegrationTestCase):
 		with self.assertRaises(frappe.ValidationError):
 			opp.save()
 
+	def test_deleting_the_project_frees_the_opportunity(self):
+		opp = self.advance(self.new_opportunity(), config.WON)
+		project = opp.reload().pew_project
+
+		frappe.delete_doc("Project", project)
+		self.assertFalse(frappe.db.exists("Project", project))
+		opp.reload()
+		self.assertFalse(opp.pew_project)
+		self.assertEqual(opp.sales_stage, config.WON_STAGE)
+
+		# still won, so the next save hands it off again
+		opp.save()
+		opp.reload()
+		self.assertEqual(frappe.db.get_value("Project", opp.pew_project, "source_opportunity"), opp.name)
+		self.assertEqual(frappe.db.count("Project", {"source_opportunity": opp.name}), 1)
+
+	def test_deleting_a_won_opportunity_keeps_the_project(self):
+		first = self.advance(self.new_opportunity(), config.WON)
+		second = self.advance(self.new_opportunity(), config.WON)
+		projects = [first.reload().pew_project, second.reload().pew_project]
+
+		frappe.set_user(SALES_USER)
+		with self.assertRaises(frappe.ValidationError):
+			frappe.delete_doc("Opportunity", first.name)
+
+		frappe.set_user(SALES_MANAGER)
+		for opp in (first, second):  # two unlinked Projects must not collide on the unique column
+			frappe.delete_doc("Opportunity", opp.name)
+			self.assertFalse(frappe.db.exists("Opportunity", opp.name))
+		for project in projects:
+			self.assertTrue(frappe.db.exists("Project", project))
+			self.assertIsNone(frappe.db.get_value("Project", project, "source_opportunity"))
+
+		# the freed number is given out again: that tender gets its own Project, not the one left behind
+		reused = self.advance(self.new_opportunity(), config.WON)
+		self.assertEqual(reused.name, second.name)
+		self.assertNotIn(reused.reload().pew_project, projects)
+
+	def test_project_with_tasks_is_still_protected(self):
+		opp = self.advance(self.new_opportunity(), config.WON)
+		project = opp.reload().pew_project
+		frappe.get_doc({"doctype": "Task", "subject": "Site survey", "project": project}).insert(
+			ignore_permissions=True
+		)
+		with self.assertRaises(frappe.LinkExistsError):
+			frappe.delete_doc("Project", project)
+
 	def test_work_order_file_restricted_to_managers(self):
 		opp = self.new_opportunity()
 		po = frappe.get_doc(

@@ -254,10 +254,26 @@ def _attach_document_files(doc):
 
 
 def on_trash(doc, method=None):
-	if is_manager():
-		return
-	if doc.status == "Lost" or doc.pew_project or stage_index(doc.sales_stage) == WON:
+	if not is_manager() and (doc.status == "Lost" or doc.pew_project or stage_index(doc.sales_stage) == WON):
 		frappe.throw(_("Only a Sales Manager can delete a Lost or Won Opportunity."))
+
+	# Opportunity and Project link to each other, so the standard link check would refuse the delete.
+	# The Project stays; only its link back is cleared (to NULL: source_opportunity is unique).
+	for project in frappe.get_all("Project", filters={"source_opportunity": doc.name}, pluck="name"):
+		frappe.db.set_value("Project", project, "source_opportunity", None)
+		frappe.get_doc("Project", project).add_comment(
+			"Info", _("Source Opportunity {0} was deleted.").format(doc.name)
+		)
+
+
+def unlink_deleted_project(doc, method=None):
+	"""Project on_trash, the other half of the two-way link: clear pew_project on the Opportunity so the
+	Project can be deleted. The Opportunity stays won, so its next save hands it off to a new Project."""
+	for opportunity in frappe.get_all("Opportunity", filters={"pew_project": doc.name}, pluck="name"):
+		frappe.db.set_value("Opportunity", opportunity, "pew_project", None)
+		frappe.get_doc("Opportunity", opportunity).add_comment(
+			"Info", _("Project {0} was deleted.").format(doc.name)
+		)
 
 
 # Project handoff ---------------------------------------------------------------------------------
@@ -275,10 +291,13 @@ def create_project(opp):
 		opp.db_set("pew_project", existing)
 		return existing
 
-	# Project.project_name is unique; two won tenders can share an Opportunity Name
-	project_name = opp.title or opp.customer_name or opp.name
-	if frappe.db.exists("Project", {"project_name": project_name}):
-		project_name = f"{project_name} ({opp.name})"
+	# Project.project_name is unique; two won tenders can share an Opportunity Name. The number of a
+	# deleted Opportunity is given out again, so the Project it left behind can hold the suffixed name.
+	title = opp.title or opp.customer_name or opp.name
+	project_name, attempt = title, 0
+	while frappe.db.exists("Project", {"project_name": project_name}):
+		attempt += 1
+		project_name = f"{title} ({opp.name})" if attempt == 1 else f"{title} ({opp.name}-{attempt})"
 
 	project = frappe.get_doc(
 		{

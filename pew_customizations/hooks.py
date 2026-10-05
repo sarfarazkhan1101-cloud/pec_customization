@@ -114,7 +114,10 @@ doc_events = {
 			"pew_customizations.projects.project_team.sync_team_access",
 			"pew_customizations.projects.approval_codes.refresh_task_status",
 		],
-		"on_trash": "pew_customizations.projects.project_team.revoke_all",
+		"on_trash": [
+			"pew_customizations.projects.project_team.revoke_all",
+			"pew_customizations.crm.opportunity.unlink_deleted_project",
+		],
 	},
 }
 
