@@ -131,7 +131,17 @@ has_permission = {
 	"File": "pew_customizations.crm.file.has_permission",
 }
 
-after_migrate = ["pew_customizations.crm.setup.after_migrate"]
+after_migrate = [
+	"pew_customizations.crm.setup.after_migrate",
+	"pew_customizations.hr.employee_checkin.after_migrate",
+]
+
+# Client Site Visit on the Frappe HR check-in (pew_customizations/hr). No HRMS file is changed, and
+# both hooks do nothing on a site without HRMS.
+extend_doctype_class = {
+	"Employee Checkin": "pew_customizations.hr.employee_checkin.EmployeeCheckinClientSite",
+}
+after_request = ["pew_customizations.hr.pwa.add_client_site_script"]
 
 # Dashboard Connections
 # ----------------------

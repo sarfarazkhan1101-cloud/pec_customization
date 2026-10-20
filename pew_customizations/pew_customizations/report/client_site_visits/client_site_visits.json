@@ -1,0 +1,33 @@
+{
+ "add_total_row": 0,
+ "columns": [],
+ "creation": "2026-10-20 00:00:00.000000",
+ "disable_prepared_report": 0,
+ "disabled": 0,
+ "docstatus": 0,
+ "doctype": "Report",
+ "filters": [],
+ "idx": 0,
+ "is_standard": "Yes",
+ "json": "{\"filters\":[[\"Employee Checkin\",\"pew_client_site_visit\",\"=\",1]],\"fields\":[[\"name\",\"Employee Checkin\"],[\"employee\",\"Employee Checkin\"],[\"employee_name\",\"Employee Checkin\"],[\"log_type\",\"Employee Checkin\"],[\"time\",\"Employee Checkin\"],[\"shift\",\"Employee Checkin\"],[\"latitude\",\"Employee Checkin\"],[\"longitude\",\"Employee Checkin\"],[\"attendance\",\"Employee Checkin\"]],\"order_by\":\"`tabEmployee Checkin`.`time` desc, `tabEmployee Checkin`.`name` desc\",\"add_totals_row\":0,\"page_length\":20,\"column_widths\":{\"name\":150,\"employee\":100,\"employee_name\":140,\"log_type\":90,\"time\":170,\"shift\":120,\"latitude\":100,\"longitude\":100,\"attendance\":145},\"group_by\":null}",
+ "modified": "2026-10-20 00:00:03.000000",
+ "modified_by": "Administrator",
+ "module": "PEW Customizations",
+ "name": "Client Site Visits",
+ "owner": "Administrator",
+ "prepared_report": 0,
+ "ref_doctype": "Employee Checkin",
+ "report_name": "Client Site Visits",
+ "report_type": "Report Builder",
+ "roles": [
+  {
+   "role": "HR Manager"
+  },
+  {
+   "role": "HR User"
+  },
+  {
+   "role": "System Manager"
+  }
+ ]
+}
