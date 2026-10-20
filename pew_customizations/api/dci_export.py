@@ -20,9 +20,8 @@ from pew_customizations.pew_customizations.report.pec_dci_report.pec_dci_report 
 	get_dci_data,
 )
 from pew_customizations.projects.task_revisions import MAX_REVISIONS
+from pew_customizations.setup.install import PROJECT_CLIENT_FIELDS
 
-GROUP_HEADER_ROW = 7  # R0 ... R10 and Latest Status, each merged over its columns
-COLUMN_HEADER_ROW = 8
 DATE_FORMAT = "DD-MMM-YYYY"
 
 _BOLD = Font(bold=True)
@@ -59,8 +58,9 @@ def build_dci_workbook(project, scope=None):
 	workbook = Workbook()
 	sheet = workbook.active
 	sheet.title = "DCI"
-	_write_project_header(sheet, project, scope)
-	_write_table(sheet, dci.rows)
+	header_rows = _write_project_header(sheet, project, scope)
+	# one blank row between the project header and the table
+	_write_table(sheet, dci.rows, header_rows + 2)
 	_write_code_summary(workbook.create_sheet("Code Summary"), dci)
 
 	output = BytesIO()
@@ -69,8 +69,12 @@ def build_dci_workbook(project, scope=None):
 
 
 def _write_project_header(sheet, project, scope):
+	"""Returns the number of rows written: Client 1 ... Client 5 and Scope appear only when set."""
 	details = frappe.db.get_value(
-		"Project", project, ["project_name", "project_type", "customer", "end_user"], as_dict=True
+		"Project",
+		project,
+		["project_name", "project_type", "customer", "end_user", "consultant", *PROJECT_CLIENT_FIELDS],
+		as_dict=True,
 	)
 	client = frappe.db.get_value("Customer", details.customer, "customer_name") if details.customer else None
 	header = [
@@ -79,6 +83,13 @@ def _write_project_header(sheet, project, scope):
 		(_("Project Type"), details.project_type),
 		(_("Client Name"), client),
 		(_("End User Name"), details.end_user),
+		(_("Consultant"), details.consultant),
+	]
+	meta = frappe.get_meta("Project")
+	header += [
+		(_(meta.get_label(fieldname)), details[fieldname])
+		for fieldname in PROJECT_CLIENT_FIELDS
+		if details[fieldname]
 	]
 	if scope:
 		header.append((_("Scope"), frappe.db.get_value("Scope", scope, "scope_name")))
@@ -89,14 +100,17 @@ def _write_project_header(sheet, project, scope):
 		sheet.merge_cells(start_row=row, start_column=3, end_row=row, end_column=4)
 		sheet.cell(row=row, column=1, value=label).font = _BOLD
 		sheet.cell(row=row, column=3, value=value)
+	return len(header)
 
 
-def _write_table(sheet, rows):
+def _write_table(sheet, rows, group_header_row):
+	# group header row: R0 ... R10 and Latest Status, each merged over its columns; then their columns
+	column_header_row = group_header_row + 1
 	column = 1
 
 	# leading columns: one header cell spanning both header rows
 	for _fieldname, label, _fieldtype, width in LEAD_COLUMNS:
-		_header(sheet, GROUP_HEADER_ROW, column, _(label), end_row=COLUMN_HEADER_ROW)
+		_header(sheet, group_header_row, column, _(label), end_row=column_header_row)
 		sheet.column_dimensions[get_column_letter(column)].width = width / 7
 		column += 1
 	first_revision_column = column
@@ -109,16 +123,16 @@ def _write_table(sheet, rows):
 
 	fields = [(fieldname, fieldtype) for fieldname, _label, fieldtype, _width in LEAD_COLUMNS]
 	for group_label, columns in groups:
-		_header(sheet, GROUP_HEADER_ROW, column, group_label, end_column=column + len(columns) - 1)
+		_header(sheet, group_header_row, column, group_label, end_column=column + len(columns) - 1)
 		for fieldname, label, fieldtype, width in columns:
 			# "Latest Submission Date" under the "Latest Status" group reads "Submission Date"
-			_header(sheet, COLUMN_HEADER_ROW, column, _(label.removeprefix("Latest ")))
+			_header(sheet, column_header_row, column, _(label.removeprefix("Latest ")))
 			sheet.column_dimensions[get_column_letter(column)].width = width / 7
 			fields.append((fieldname, fieldtype))
 			column += 1
-	sheet.row_dimensions[COLUMN_HEADER_ROW].height = 30
+	sheet.row_dimensions[column_header_row].height = 30
 
-	for row_number, row in enumerate(rows, start=COLUMN_HEADER_ROW + 1):
+	for row_number, row in enumerate(rows, start=column_header_row + 1):
 		for column, (fieldname, fieldtype) in enumerate(fields, start=1):
 			cell = sheet.cell(row=row_number, column=column, value=row.get(fieldname))
 			cell.border = _BORDER
@@ -126,7 +140,7 @@ def _write_table(sheet, rows):
 				cell.number_format = DATE_FORMAT
 
 	# the headers and the document columns stay in view while scrolling through the revisions
-	sheet.freeze_panes = sheet.cell(row=COLUMN_HEADER_ROW + 1, column=first_revision_column)
+	sheet.freeze_panes = sheet.cell(row=column_header_row + 1, column=first_revision_column)
 
 
 def _header(sheet, row, column, label, end_row=None, end_column=None):

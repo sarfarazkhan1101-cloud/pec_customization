@@ -16,7 +16,6 @@ from pew_customizations.crm.customizations import get_custom_field_names as _crm
 from pew_customizations.crm.customizations import get_property_setter_names as _crm_ps  # noqa: E402
 from pew_customizations.setup.install import (  # noqa: E402
 	LIFECYCLE_TASKS,
-	MARKET_SEGMENTS,
 	NOTIFICATION_REVISION_APPROVED,
 	NOTIFICATION_REVISION_REJECTED,
 	NOTIFICATION_REVISION_SUBMITTED,
@@ -54,7 +53,7 @@ fixtures = [
 	},
 	{"dt": "Role", "filters": [["name", "in", PEC_ROLES]]},
 	{"dt": "Sales Stage", "filters": [["name", "in", _crm.PIPELINE_STAGES]]},
-	{"dt": "Market Segment", "filters": [["name", "in", MARKET_SEGMENTS]]},
+	{"dt": "Market Segment", "filters": [["name", "in", _crm.MARKET_SEGMENTS]]},
 	{"dt": "Notification", "filters": [["name", "in", _ALL_NOTIFICATION_NAMES]]},
 	{"dt": "Workflow", "filters": [["name", "in", [WORKFLOW_NAME, PEC_REVISION_WORKFLOW_NAME]]]},
 	{"dt": "Opportunity Lost Reason", "filters": [["name", "in", _crm.LOST_REASONS]]},
@@ -64,9 +63,15 @@ fixtures = [
 	},
 	{"dt": "Project Template", "filters": [["name", "in", _ALL_PROJECT_TEMPLATE_NAMES]]},
 	{"dt": "UTM Source", "filters": [["name", "in", _crm.LEAD_SOURCES]]},
-	# Opportunity's permissions incl. level 1 (Work Order / Client PO) for Sales Manager, and Task's
-	# incl. the PEC roles (who may export the DCI report)
-	{"dt": "Custom DocPerm", "filters": [["parent", "in", ["Opportunity", "Task", "Project Template"]]]},
+	# Opportunity's permissions incl. level 1 (Work Order / Client PO) and level 2 (Management
+	# Decision), Sales User read on Sales Stage and Market Segment, and Task's incl. the PEC roles (who
+	# may export the DCI report)
+	{
+		"dt": "Custom DocPerm",
+		"filters": [
+			["parent", "in", ["Opportunity", "Sales Stage", "Market Segment", "Task", "Project Template"]]
+		],
+	},
 ]
 
 # Document Events

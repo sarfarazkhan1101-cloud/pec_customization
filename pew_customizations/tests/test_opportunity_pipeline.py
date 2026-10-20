@@ -10,14 +10,20 @@ from unittest.mock import patch
 import frappe
 from frappe.client import set_value
 from frappe.model.workflow import apply_workflow
-from frappe.tests import IntegrationTestCase, change_settings
+from frappe.tests import IntegrationTestCase
 from frappe.utils import add_days, add_to_date, now_datetime, today
 
-from erpnext.crm.doctype.lead.lead import make_opportunity as make_opportunity_from_lead
+from erpnext.crm.doctype.lead.lead import make_customer as make_customer_from_lead
+from erpnext.selling.doctype.customer.customer import make_opportunity as make_opportunity_from_customer
 
 from pew_customizations.crm import config
 from pew_customizations.crm.customer import onload as customer_onload
-from pew_customizations.crm.customizations import LOI_ISSUED_FIELD
+from pew_customizations.crm.customizations import (
+	CUSTOM_FIELDS,
+	LOI_ISSUED_FIELD,
+	PIPELINE_LAYOUT_HEAD,
+	get_pipeline_layout,
+)
 from pew_customizations.crm.file import has_permission as file_has_permission
 from pew_customizations.crm.opportunity import get_missing_items
 
@@ -87,10 +93,30 @@ class TestOpportunityPipeline(IntegrationTestCase):
 				"company": self.company,
 				"currency": self.currency,
 				"title": "Pipeline test tender",
+				# no tender gates unless a test asks for a tender Inquiry Type
+				"pew_inquiry_type": config.DIRECT_INQUIRY,
 				**values,
 			}
 		)
 		return opp.insert(ignore_permissions=True)
+
+	def legacy_lead_opportunity(self, lead):
+		"""An Opportunity made on a Lead before Inquiry From had to be a Customer."""
+		opp = self.new_opportunity()
+		frappe.db.set_value("Opportunity", opp.name, {"opportunity_from": "Lead", "party_name": lead.name})
+		return frappe.get_doc("Opportunity", opp.name)
+
+	def approve_bid(self, opp):
+		"""Tender details, the team's request and a Sales Manager's approval."""
+		opp.pew_tender_ref_no = "GOV/2026/117"
+		opp.pew_request_bid_approval = 1
+		opp.save(ignore_permissions=True)
+		frappe.set_user(SALES_MANAGER)
+		opp = frappe.get_doc("Opportunity", opp.name)
+		opp.pew_bid_decision = config.BID_APPROVED
+		opp.save()
+		frappe.set_user("Administrator")
+		return frappe.get_doc("Opportunity", opp.name)
 
 	def file(self, opp, name, **values):
 		url = f"https://files.pewclient.example.com/{opp.name}/{name}"
@@ -110,8 +136,7 @@ class TestOpportunityPipeline(IntegrationTestCase):
 		"""Fill in everything the gates need to put `opp` at `stage_index`."""
 		if stage_index > config.INQUIRY:
 			opp.contact_person = self.contact.name
-			opp.pew_organization_type = "Private Sector"
-			opp.market_segment = frappe.get_all("Market Segment", pluck="name", limit=1)[0]
+			opp.market_segment = config.MARKET_SEGMENTS[0]
 			opp.utm_source = "Tender Portal"
 			opp.opportunity_owner = "Administrator"
 			opp.pew_inquiry_received_on = today()
@@ -190,18 +215,42 @@ class TestOpportunityPipeline(IntegrationTestCase):
 		self.assertLess(order.index("pew_pipeline_tab"), order.index("pew_stage1_section"))
 		self.assertLess(order.index("pew_stage2_section"), order.index("contact_person"))
 		self.assertLess(order.index("contact_person"), order.index("pew_stage3_section"))
+		# Inquiry Type tops Stage 2; its blocks follow the fixed fields, before Stage 3
+		self.assertEqual(order[order.index("pew_stage2_section") + 2], "pew_inquiry_type")
+		self.assertLess(order.index("expected_closing"), order.index("pew_stage2_tender_section"))
+		self.assertLess(order.index("pew_stage2_release_section"), order.index("pew_stage3_section"))
 		self.assertTrue(opportunity.track_changes)
+
+	def test_pipeline_layout_places_every_field_once(self):
+		layout = get_pipeline_layout()
+		self.assertEqual(len(layout), len(set(layout)))
+		pipeline_fields = {f["fieldname"] for f in CUSTOM_FIELDS["Opportunity"]} - {"pew_stage_index", "pew_lost_on"}
+		self.assertEqual(pipeline_fields - set(layout), set())
+		standard = set(PIPELINE_LAYOUT_HEAD) - pipeline_fields
+		self.assertEqual({f for f in standard if not frappe.get_meta("Opportunity").get_field(f)}, set())
+
+	def test_sales_users_can_read_stage_and_segment(self):
+		# the new-Opportunity form fetches the default stage's pipeline order as the current user, and
+		# Market Segment is needed to leave Inquiry / Tender
+		frappe.set_user(SALES_USER)
+		for doctype in ("Sales Stage", "Market Segment"):
+			self.assertTrue(frappe.has_permission(doctype, "read"), doctype)
+			self.assertFalse(frappe.has_permission(doctype, "write"), doctype)
 
 	def test_sales_stages_are_ordered(self):
 		for stage, order in config.SALES_STAGE_ORDER.items():
 			self.assertEqual(frappe.db.get_value("Sales Stage", stage, "pew_stage_order"), order)
 
-	def test_form_script_stage_list_matches_config(self):
-		# the progress bar and the dropdown sort use a copy (unsaved Opportunities have no __onload)
+	def test_form_script_lists_match_config(self):
+		# the progress bar and the dropdown sort use a copy (unsaved Opportunities have no __onload),
+		# and so does the Market Segment filter
 		with open(frappe.get_app_path("pew_customizations", "public", "js", "opportunity.js")) as f:
-			block = re.search(r"const PEW_STAGES = \[(.*?)\];", f.read(), re.S)
-		self.assertTrue(block, "PEW_STAGES not found in opportunity.js")
-		self.assertEqual(re.findall(r'"([^"]+)"', block.group(1)), STAGES)
+			script = f.read()
+		for name, expected in (("PEW_STAGES", STAGES), ("PEW_MARKET_SEGMENTS", config.MARKET_SEGMENTS)):
+			block = re.search(rf"const {name} = \[(.*?)\];", script, re.S)
+			self.assertTrue(block, f"{name} not found in opportunity.js")
+			self.assertEqual(re.findall(r'"([^"]+)"', block.group(1)), expected)
+		self.assertIn(f"const PEW_INQUIRY = {config.INQUIRY};", script)
 
 	# stages and gates --------------------------------------------------------------------------
 
@@ -209,34 +258,47 @@ class TestOpportunityPipeline(IntegrationTestCase):
 		opp = self.new_opportunity()
 		self.assertEqual(opp.sales_stage, "Inquiry / Tender")
 		self.assertEqual(opp.pew_stage_index, config.INQUIRY)
+		# the creator leads the deal unless someone else is picked (Cold deals' reminders go to them)
+		self.assertEqual(opp.opportunity_owner, frappe.session.user)
 
-	def test_opportunity_from_lead_starts_at_inquiry(self):
-		lead = frappe.get_doc({"doctype": "Lead", "lead_name": "Stage Default Lead"}).insert(ignore_permissions=True)
-		self.assertEqual(make_opportunity_from_lead(lead.name).sales_stage, config.DEFAULT_STAGE)
+	def test_opportunity_from_customer_starts_at_inquiry(self):
+		opp = make_opportunity_from_customer(self.customer.name)
+		self.assertEqual((opp.opportunity_from, opp.party_name), ("Customer", self.customer.name))
+		self.assertEqual(opp.sales_stage, config.DEFAULT_STAGE)
 
-	@change_settings("CRM Settings", auto_creation_of_contact=1)
-	def test_opportunity_from_lead_needs_no_prospect(self):
-		"""What Lead → Create → Opportunity opens (public/js/lead.js skips the Prospect dialog)."""
+	def test_opportunity_must_be_on_a_customer(self):
+		lead = frappe.get_doc({"doctype": "Lead", "lead_name": "Walk-in", "company_name": "Walk-in Co"}).insert(
+			ignore_permissions=True
+		)
+		with self.assertRaises(frappe.ValidationError):
+			self.new_opportunity(opportunity_from="Lead", party_name=lead.name)
+
+		# moving an existing Opportunity onto a Lead is refused too...
+		opp = self.new_opportunity()
+		opp.opportunity_from, opp.party_name = "Lead", lead.name
+		with self.assertRaises(frappe.ValidationError):
+			opp.save()
+
+		# ...while one made on a Lead before the rule still saves, and can be pointed at its Customer
+		legacy = self.legacy_lead_opportunity(lead)
+		legacy.pew_cold_notes = "still editable"
+		legacy.save()
+		legacy.opportunity_from, legacy.party_name = "Customer", self.customer.name
+		legacy.save()
+		self.assertEqual(frappe.db.get_value("Opportunity", legacy.name, "opportunity_from"), "Customer")
+
+	def test_lead_reaches_an_opportunity_through_its_customer(self):
+		"""What public/js/lead.js does for Lead → Create → Opportunity: the standard Customer route."""
 		lead = frappe.get_doc(
-			{
-				"doctype": "Lead",
-				"first_name": "Direct",
-				"last_name": "Opportunity",
-				"company_name": "Direct Opportunity Co",
-				"email_id": "direct.opportunity@pewclient.example.com",
-				"mobile_no": "+91 90000 00001",
-			}
+			{"doctype": "Lead", "first_name": "Direct", "company_name": "Direct Opportunity Co"}
 		).insert(ignore_permissions=True)
-		prospects = frappe.db.count("Prospect")
+		customer = make_customer_from_lead(lead.name)
+		customer.insert(ignore_permissions=True)
 
-		opp = make_opportunity_from_lead(lead.name)
-		opp.company = self.company
+		opp = make_opportunity_from_customer(customer.name)
+		opp.update({"company": self.company, "pew_inquiry_type": config.DIRECT_INQUIRY, "title": "From a Lead"})
 		opp.insert(ignore_permissions=True)
-
-		self.assertEqual((opp.opportunity_from, opp.party_name), ("Lead", lead.name))
-		self.assertEqual((opp.contact_email, opp.contact_mobile), (lead.email_id, lead.mobile_no))
-		self.assertTrue(frappe.db.exists("Dynamic Link", {"parent": opp.contact_person, "link_name": lead.name}))
-		self.assertEqual(frappe.db.count("Prospect"), prospects)
+		self.assertEqual((opp.opportunity_from, opp.party_name), ("Customer", customer.name))
 
 	def test_cold_is_still_selectable(self):
 		opp = self.new_opportunity(sales_stage=config.COLD_STAGE)
@@ -266,19 +328,35 @@ class TestOpportunityPipeline(IntegrationTestCase):
 		self.assertIn("Assigned to the estimation team", missing)
 		self.assertIn("Contact Person", missing)
 
-	def test_conditional_gates(self):
-		opp = self.new_opportunity()
-		self.advance(opp, config.INQUIRY)
-		self.complete(opp, config.QUALIFICATION)
-		opp.pew_organization_type = "Government"  # tender ref becomes required
-		opp.sales_stage = STAGES[config.QUALIFICATION - 1]
+	def test_inquiry_type_needed_from_inquiry_tender(self):
+		with self.assertRaises(frappe.ValidationError):
+			self.new_opportunity(pew_inquiry_type=None)
+
+		opp = self.new_opportunity(sales_stage=config.COLD_STAGE, pew_inquiry_type=None)  # Cold needs nothing
+		opp.sales_stage = STAGES[config.INQUIRY - 1]
 		with self.assertRaises(frappe.ValidationError):
 			opp.save()
+		self.assertIn("Inquiry Type", [label for _stage, label in get_missing_items(opp, config.INQUIRY)])
+
+		opp.reload()
+		opp.pew_inquiry_type = config.RATE_CONTRACT
+		opp.sales_stage = STAGES[config.INQUIRY - 1]
+		opp.save()
+
+	def test_conditional_gates(self):
+		opp = self.new_opportunity(pew_inquiry_type=config.PUBLIC_TENDER)
+		self.complete(opp, config.QUALIFICATION)
+		opp.sales_stage = STAGES[config.QUALIFICATION - 1]
+		with self.assertRaises(frappe.ValidationError):
+			opp.save()  # tender ref and the management approval are missing
+		missing = [label for _stage, label in get_missing_items(opp, config.QUALIFICATION)]
+		self.assertIn("Tender / Bid Ref No", missing)
+		self.assertIn("Request Bid Approval?", missing)
+		self.assertIn(f"Bid Decision is {config.BID_APPROVED}", missing)
 
 		opp.reload()  # a rejected save leaves the in-memory timestamp ahead of the DB
+		opp = self.approve_bid(opp)
 		self.complete(opp, config.QUALIFICATION)
-		opp.pew_organization_type = "Government"
-		opp.pew_tender_ref_no = "GOV/2026/117"
 		opp.sales_stage = STAGES[config.QUALIFICATION - 1]
 		opp.save()
 
@@ -287,6 +365,133 @@ class TestOpportunityPipeline(IntegrationTestCase):
 		opp.sales_stage = STAGES[config.QUERIES - 1]
 		with self.assertRaises(frappe.ValidationError):
 			opp.save()
+
+	def test_tender_due_date_needed_for_tenders_only(self):
+		for inquiry_type in (config.CORPORATE_TENDER, config.DIRECT_INQUIRY):
+			opp = self.new_opportunity(pew_inquiry_type=inquiry_type)
+			if inquiry_type in config.TENDER_INQUIRY_TYPES:
+				opp = self.approve_bid(opp)
+			self.advance(opp, config.QUALIFICATION)
+			self.complete(opp, config.QUERIES)
+			opp.pew_bid_submission_deadline = None
+			missing = [label for _stage, label in get_missing_items(opp, config.QUERIES)]
+			self.assertEqual("Due Date & Time" in missing, inquiry_type in config.TENDER_INQUIRY_TYPES)
+
+	def test_direct_and_rate_contract_need_no_approval(self):
+		for inquiry_type in (config.DIRECT_INQUIRY, config.RATE_CONTRACT):
+			opp = self.advance(self.new_opportunity(pew_inquiry_type=inquiry_type), config.PROPOSAL)
+			self.assertEqual(opp.pew_stage_index, config.PROPOSAL)
+			self.assertFalse(opp.pew_request_bid_approval or opp.pew_bid_decision)
+
+	def test_bid_decision_is_set_by_sales_managers(self):
+		opp = self.new_opportunity(pew_inquiry_type=config.CONSORTIUM_BID)
+
+		frappe.set_user(SALES_USER)
+		opp = frappe.get_doc("Opportunity", opp.name)
+		opp.pew_request_bid_approval = 1
+		opp.pew_bid_decision = config.BID_APPROVED  # not theirs to set: frappe resets it
+		opp.save()
+		opp.reload()
+		self.assertEqual(opp.pew_bid_decision, config.BID_PENDING)
+
+		frappe.set_user(SALES_MANAGER)
+		opp = frappe.get_doc("Opportunity", opp.name)
+		opp.pew_bid_decision = config.BID_DECLINED
+		opp.save()
+		opp.reload()
+		self.assertEqual(opp.pew_bid_decision, config.BID_DECLINED)
+
+		# another Inquiry Type does not lift the No-Bid
+		opp.pew_inquiry_type = config.DIRECT_INQUIRY
+		self.complete(opp, config.QUALIFICATION)
+		opp.sales_stage = STAGES[config.QUALIFICATION - 1]
+		with self.assertRaises(frappe.ValidationError):
+			opp.save()
+
+		meta = frappe.get_meta("Opportunity")
+		for fieldname in ("pew_bid_decision", "pew_pqc_document", "pew_bid_target_date", "pew_submission_mode"):
+			self.assertEqual(meta.get_field(fieldname).permlevel, 2, fieldname)
+			self.assertTrue(meta.get_field(fieldname).no_copy, fieldname)  # a duplicate needs its own approval
+		self.assertTrue(meta.get_field("pew_request_bid_approval").no_copy)
+
+	def test_bid_approval_request_notifies_managers(self):
+		from frappe.email.doctype.notification.notification import Notification
+
+		def requests(send):
+			return [c for c in send.call_args_list if c.args[0].name == config.NOTIFICATION_BID_APPROVAL_REQUESTED]
+
+		with patch.object(Notification, "send", autospec=True) as send:
+			# ticked before the first save...
+			self.new_opportunity(pew_inquiry_type=config.PUBLIC_TENDER, pew_request_bid_approval=1)
+			self.assertEqual(len(requests(send)), 1)
+			# ...or later; saving again without a change sends nothing more
+			opp = self.new_opportunity(pew_inquiry_type=config.PUBLIC_TENDER)
+			opp.pew_request_bid_approval = 1
+			opp.save()
+			opp.pew_tender_ref_no = "GOV/2026/118"
+			opp.save()
+			self.assertEqual(len(requests(send)), 2)
+
+	def test_backfill_gives_older_opportunities_an_inquiry_type(self):
+		from pew_customizations.patches import crm_inquiry_type_backfill
+
+		govt = self.advance(self.new_opportunity(), config.QUERIES)  # already past Inquiry / Tender
+		private_ref = self.advance(self.new_opportunity(), config.QUALIFICATION)
+		private = self.advance(self.new_opportunity(), config.QUALIFICATION)
+		for opp, org, ref in (
+			(govt, "Government", "GOV/2026/9"),
+			(private_ref, "Private Sector", "RFQ-77"),
+			(private, "Private Sector", None),
+		):
+			frappe.db.set_value(
+				"Opportunity", opp.name, {"pew_inquiry_type": None, "pew_organization_type": org, "pew_tender_ref_no": ref}
+			)
+		# the fields exist already; creating them again could commit the test's transaction (DDL)
+		with patch.object(crm_inquiry_type_backfill, "create_custom_fields"):
+			crm_inquiry_type_backfill.execute()
+
+		fields = ["pew_inquiry_type", "pew_request_bid_approval", "pew_bid_decision"]
+		self.assertEqual(
+			frappe.db.get_value("Opportunity", govt.name, fields), (config.PUBLIC_TENDER, 1, config.BID_APPROVED)
+		)
+		self.assertEqual(
+			frappe.db.get_value("Opportunity", private_ref.name, fields),
+			(config.CORPORATE_TENDER, 1, config.BID_APPROVED),
+		)
+		inquiry_type, requested, decision = frappe.db.get_value("Opportunity", private.name, fields)
+		self.assertEqual((inquiry_type, requested), (config.DIRECT_INQUIRY, 0))
+		self.assertFalse(decision)
+
+		# none of them meets a requirement it never had when moving on
+		for opp in (govt, private_ref, private):
+			opp.reload()
+			self.advance(opp, config.PROPOSAL)
+			self.assertEqual(opp.pew_stage_index, config.PROPOSAL)
+
+	def test_contact_details_come_from_the_contact(self):
+		opp = self.new_opportunity(contact_person=self.contact.name)
+		self.assertEqual(opp.job_title, "Procurement Head")
+		self.assertEqual(opp.contact_email, "tender.contact@pewclient.example.com")
+		# a value typed before the fields became read-only is kept (the form refreshes them on a new Contact)
+		typed = self.new_opportunity(contact_person=self.contact.name, job_title="Typed by hand")
+		self.assertEqual(typed.job_title, "Typed by hand")
+		meta = frappe.get_meta("Opportunity")
+		for fieldname in ("job_title", "contact_email", "contact_mobile", "phone"):
+			self.assertTrue(meta.get_field(fieldname).read_only, fieldname)
+
+	def test_older_market_segment_is_not_copied_from_the_customer(self):
+		old = "PEW Test Legacy Segment"
+		if not frappe.db.exists("Market Segment", old):
+			frappe.get_doc({"doctype": "Market Segment", "market_segment": old}).insert()
+		party = _customer("PEW Legacy Segment Customer")
+		party.db_set("market_segment", old)
+		opp = self.new_opportunity(party_name=party.name)
+		self.assertFalse(opp.market_segment)
+		opp.save()  # ERPNext copies the Customer's segment into the empty field on every save
+		self.assertFalse(opp.market_segment)
+
+		party.db_set("market_segment", config.MARKET_SEGMENTS[1])
+		self.assertEqual(self.new_opportunity(party_name=party.name).market_segment, config.MARKET_SEGMENTS[1])
 
 	def test_skipping_needs_every_intermediate_checklist(self):
 		opp = self.new_opportunity()
@@ -410,6 +615,14 @@ class TestOpportunityPipeline(IntegrationTestCase):
 			frappe.db.get_value("File", {"file_url": opp.pew_commercial_documents[0].file}, "document_category"),
 			"Pricing / BOQ",
 		)
+
+	def test_pqc_document_is_filed_as_commercial(self):
+		opp = self.new_opportunity(pew_inquiry_type=config.PUBLIC_TENDER)
+		opp.pew_pqc_document = self.file(opp, "pqc-proof.pdf")
+		opp.save()
+		category = frappe.db.get_value("File", {"file_url": opp.pew_pqc_document}, "document_category")
+		self.assertEqual(category, "PQC / Verification Proof")
+		self.assertEqual(config.DOCUMENT_CLASSES[category], "Commercial")  # never copied to the Project
 
 	def test_document_rows_do_not_need_a_file(self):
 		opp = self.advance(self.new_opportunity(), config.QUALIFICATION)
@@ -620,9 +833,7 @@ class TestOpportunityPipeline(IntegrationTestCase):
 		lead = frappe.get_doc({"doctype": "Lead", "lead_name": "Walk-in Prospect", "company_name": "Prospect Co"}).insert(
 			ignore_permissions=True
 		)
-		opp = frappe.get_doc(
-			{"doctype": "Opportunity", "opportunity_from": "Lead", "party_name": lead.name, "company": self.company}
-		).insert(ignore_permissions=True)
+		opp = self.legacy_lead_opportunity(lead)
 
 		from erpnext.crm.doctype.opportunity.opportunity import make_customer
 

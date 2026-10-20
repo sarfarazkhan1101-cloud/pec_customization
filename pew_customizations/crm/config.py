@@ -50,12 +50,38 @@ LOST_REASONS = [
 	"Client Went Cold",
 ]
 
-# Standard UTM Source records reused as "Lead Source". The first three are ERPNext defaults.
+# Standard UTM Source records reused as "Marketing / Lead Source". The first three are ERPNext defaults.
 REFERRAL_LEAD_SOURCE = "Reference"
-LEAD_SOURCES = ["Existing Customer", "Exhibition", REFERRAL_LEAD_SOURCE, "Tender Portal", "Direct Email"]
+LEAD_SOURCES = ["Existing Customer", "Exhibition", REFERRAL_LEAD_SOURCE, "Tender Portal", "Direct Email", "Website"]
 
+# Customer master only; the Opportunity keeps a hidden copy, filled from the Customer while empty
+# (ERPNext's Opportunity.map_fields)
 ORGANIZATION_TYPES = ["Government", "Private Sector", "PSU"]
-TENDER_REF_REQUIRED_FOR = ("Government", "PSU")
+
+# Inquiry Type drives which Stage 2 blocks show (depends_on) and which gates apply.
+PUBLIC_TENDER = "Public / Govt Tender"
+CORPORATE_TENDER = "Corporate / Private Tender"
+DIRECT_INQUIRY = "Direct Private Inquiry"
+CONSORTIUM_BID = "Back-to-Back / Consortium Bid"
+RATE_CONTRACT = "Rate Contract / Call-Off Order"
+INQUIRY_TYPES = [PUBLIC_TENDER, CORPORATE_TENDER, DIRECT_INQUIRY, CONSORTIUM_BID, RATE_CONTRACT]
+# Show Tender Details and need management approval to leave Inquiry / Tender
+TENDER_INQUIRY_TYPES = (PUBLIC_TENDER, CORPORATE_TENDER, CONSORTIUM_BID)
+
+BID_PENDING = "Pending"
+BID_APPROVED = "Approved to Bid"
+BID_DECLINED = "Declined / No-Bid"
+BID_DECISIONS = [BID_PENDING, BID_APPROVED, BID_DECLINED]
+
+# Standard Market Segment records offered on Opportunity. Older records stay for existing documents;
+# public/js/opportunity.js keeps a copy for the dropdown filter (a test keeps them in sync).
+MARKET_SEGMENTS = [
+	"Refineries & Petrochemicals",
+	"Terminals & Tank Farms",
+	"Pipelines & Marine",
+	"Green Energy & Transition",
+	"Power Plants & Utilities",
+]
 
 # Document type -> class. Only "Technical" documents are copied to the Project on handoff.
 DOCUMENT_CLASSES = {
@@ -71,6 +97,7 @@ DOCUMENT_CLASSES = {
 	"EMD / Bid Security": "Commercial",
 	"NDA": "Commercial",
 	"Work Order / PO": "Commercial",
+	"PQC / Verification Proof": "Commercial",
 	"Other Commercial": "Commercial",
 }
 TECHNICAL = "Technical"
@@ -85,6 +112,7 @@ ATTACH_FIELD_CATEGORIES = {
 	"pew_nda_attachment": "NDA",
 	"pew_final_proposal": "Proposal",
 	"pew_work_order_file": "Work Order / PO",
+	"pew_pqc_document": "PQC / Verification Proof",
 }
 WORK_ORDER_FIELD = "pew_work_order_file"
 
@@ -102,12 +130,16 @@ NOTIFICATION_BID_DEADLINE = "Bid Submission Deadline Reminder"
 NOTIFICATION_QUERY_DEADLINE = "Query Deadline Reminder"
 NOTIFICATION_TENDER_RELEASE = "Tender Release Follow-up"
 NOTIFICATION_PROJECT_REVIEW = "Project Pending Review"
+NOTIFICATION_BID_APPROVAL_REQUESTED = "Bid Approval Requested"
+NOTIFICATION_BID_DECISION = "Bid Decision Made"
 NOTIFICATIONS = [
 	NOTIFICATION_BID_VALIDITY,
 	NOTIFICATION_BID_DEADLINE,
 	NOTIFICATION_QUERY_DEADLINE,
 	NOTIFICATION_TENDER_RELEASE,
 	NOTIFICATION_PROJECT_REVIEW,
+	NOTIFICATION_BID_APPROVAL_REQUESTED,
+	NOTIFICATION_BID_DECISION,
 ]
 
 V1_SERVER_SCRIPTS = [
@@ -161,26 +193,37 @@ def _is_assigned(doc):
 	)
 
 
+def is_tender(doc):
+	return doc.pew_inquiry_type in TENDER_INQUIRY_TYPES
+
+
 # Must be satisfied to LEAVE stage n, i.e. whenever the deal is beyond n.
 # Fields listed here carry mandatory_depends_on = stage_from(n + 1) (checked by the test suite).
 EXIT_GATES = {
 	INQUIRY: [
-		Gate("title"),
 		Gate("contact_person"),
-		Gate("pew_organization_type"),
 		Gate("market_segment"),
 		Gate("utm_source"),
 		Gate("opportunity_owner"),
 		Gate("pew_inquiry_received_on"),
-		Gate("pew_tender_ref_no", when=lambda d: d.pew_organization_type in TENDER_REF_REQUIRED_FOR),
+		Gate("pew_tender_ref_no", when=is_tender),
 		Gate("pew_referral_from", when=lambda d: d.utm_source == REFERRAL_LEAD_SOURCE),
+		# Management approval (Bid Decision is permlevel 2: only Sales Managers can set it)
+		Gate("pew_request_bid_approval", when=is_tender),
+		Gate(
+			label=f"Bid Decision is {BID_APPROVED}",
+			check=lambda d: d.pew_bid_decision == BID_APPROVED,
+			when=is_tender,
+		),
+		# whatever the Inquiry Type is now: switching a declined tender to Direct does not lift the No-Bid
+		Gate(label=f"Bid Decision is not {BID_DECLINED}", check=lambda d: d.pew_bid_decision != BID_DECLINED),
 		Gate(label="Organization saved as a Customer", check=_is_customer),
 		Gate(label="Assigned to the estimation team", check=_is_assigned),
 	],
 	QUALIFICATION: [
 		# File is optional on document rows, so a row only counts once something is uploaded
 		Gate("pew_tender_documents", check=lambda d: any(row.file for row in d.pew_tender_documents)),
-		Gate("pew_bid_submission_deadline"),
+		Gate("pew_bid_submission_deadline", when=is_tender),
 		Gate("pew_nda_status"),
 		Gate("pew_nda_attachment", when=lambda d: d.pew_nda_status == "Yes"),
 		Gate("pew_subcontracted_scope", when=lambda d: d.pew_subcontract_required == "Yes"),
@@ -190,6 +233,11 @@ EXIT_GATES = {
 }
 
 # Required while AT or beyond stage n. mandatory_depends_on = stage_from(n).
-# Empty on purpose: from Queries & Clarifications (stage 4) on, nothing is mandatory, so a deal that
-# passed Qualification can move freely up to Closure (Won).
-ENTRY_GATES = {}
+# From Queries & Clarifications (stage 4) on, nothing is mandatory, so a deal that passed
+# Qualification can move freely up to Closure (Won).
+ENTRY_GATES = {
+	INQUIRY: [
+		Gate("pew_inquiry_type"),
+		Gate("title"),
+	],
+}

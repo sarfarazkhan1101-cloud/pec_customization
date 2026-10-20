@@ -24,8 +24,22 @@ setup at the end.
   its stage list mirrors `PIPELINE_STAGES` (checked by a test).
 - **Gates**: `pew_customizations/crm/config.py` (`EXIT_GATES`, `ENTRY_GATES`) is the single list of
   checklist items. The server enforces it on every forward move, including Kanban drags and API writes.
-  Only leaving Inquiry / Tender and Qualification has checklist items; from Queries & Clarifications
-  to Closure (Won) no field is mandatory.
+  Inquiry Type and Opportunity Name are needed from Inquiry / Tender on; otherwise only leaving
+  Inquiry / Tender and Qualification has checklist items, and from Queries & Clarifications to
+  Closure (Won) no field is mandatory.
+- **Inquiry Type** (top of Stage 2) decides which Stage 2 blocks show (`depends_on`): Public / Govt,
+  Corporate / Private and Back-to-Back / Consortium get Tender Details, Request Bid Approval? and, once
+  requested, the Management Decision; Rate Contract / Call-Off gets Release Order Details; Direct
+  Private Inquiry gets neither. A tender leaves Inquiry / Tender only with Bid Decision "Approved to
+  Bid"; the Management Decision fields are permission level 2 (Sales Users read, Sales Managers write).
+  Type of Organization, Key Account, Website and Address live on the Customer only. Opportunities from
+  before Inquiry Type get one from `patches/crm_inquiry_type_backfill.py` (tenders already past Inquiry /
+  Tender are recorded as approved). Sales Users read Sales Stage and Market Segment (Custom DocPerm),
+  which standard ERPNext leaves to Sales Managers.
+- **Inquiry From** is always a Customer (`crm/opportunity.py`): "Create a new Customer" in the field
+  opens the standard Customer quick entry. Opportunities made on a Lead earlier keep working: switch
+  Opportunity From to Customer in the form (it locks once it is a Customer), or, when the Lead has no
+  Customer yet, use Create → Customer, which moves the Opportunity onto it (`crm/customer.py`).
 - **Lost**: standard Declare Lost dialog (button added); the deal keeps its stage, gets a red "Lost" tag
   and becomes read-only except for Sales Managers.
 - **Won**: moving to Closure (Won) (Sales Manager only) sets status Converted and creates one Project in
@@ -33,8 +47,10 @@ setup at the end.
 - **Execution Team**: the Project's standard Users table. After approval, each member gets a User
   Permission on the Project.
 - **Kanban**: "Tender Pipeline" board on `sales_stage`, maintained by `after_migrate`.
-- **Lead → Opportunity**: Create → Opportunity on a Lead opens the standard mapped Opportunity directly,
-  without ERPNext's Create Prospect / Create Contact dialog (`public/js/lead.js`). No Prospect is created.
+- **Lead → Opportunity**: Create → Opportunity on a Lead goes through the standard Customer route
+  (`public/js/lead.js`): it opens a new Opportunity for the Lead's Customer, or offers Create → Customer
+  first. ERPNext's Create Prospect / Create Contact dialog is skipped. Creating an Opportunity from an
+  email (which makes a Lead) is refused; link the email with Actions → Link Emails instead.
 
 Changing fields or settings on a development site:
 

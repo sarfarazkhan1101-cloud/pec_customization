@@ -8,13 +8,20 @@ filters from `get_custom_field_names()` / `get_property_setter_names()`.
 import json
 
 from pew_customizations.crm.config import (
+	BID_APPROVED,
+	BID_DECISIONS,
+	BID_DECLINED,
+	CONSORTIUM_BID,
+	CORPORATE_TENDER,
 	DEFAULT_STAGE,
 	DOCUMENT_CLASSES,
 	INQUIRY,
+	INQUIRY_TYPES,
 	ORGANIZATION_TYPES,
 	QUALIFICATION,
+	RATE_CONTRACT,
 	REFERRAL_LEAD_SOURCE,
-	TENDER_REF_REQUIRED_FOR,
+	TENDER_INQUIRY_TYPES,
 	WORK_ORDER_FIELD,
 	stage_from,
 )
@@ -23,6 +30,12 @@ _YES_NO = "\nYes\nNo"
 _FEASIBILITY = "\nYes\nNo\nReview Needed"
 # fieldname fixed by the client spec, hence no pew_ prefix
 LOI_ISSUED_FIELD = "client_has_issued_loi_or_po"
+# Bid Decision and the rest of the Management Decision block: Sales Users read, Sales Managers write
+MANAGEMENT_PERMLEVEL = 2
+
+
+def _options(values):
+	return "\n" + "\n".join(values)
 
 
 def _section(idx, label):
@@ -37,8 +50,29 @@ def _section(idx, label):
 	}
 
 
+def _sub_section(idx, name, label, condition):
+	"""A labelled block inside stage `idx` that shows only when `condition` (JS) holds. It opens and
+	collapses with its stage (pew_show_current_stage in public/js/opportunity.js matches the name)."""
+	return {
+		"fieldname": f"pew_stage{idx}_{name}_section",
+		"label": label,
+		"fieldtype": "Section Break",
+		"collapsible": 1,
+		"collapsible_depends_on": f"eval:doc.pew_stage_index=={idx}",
+		"depends_on": f"eval:doc.pew_stage_index>={idx} && {condition}",
+	}
+
+
 def _column(name, label=None):
 	return {"fieldname": name, "fieldtype": "Column Break", "label": label}
+
+
+def _inquiry_type_in(*types):
+	"""JS condition: the Opportunity's Inquiry Type is one of `types`."""
+	return f"{json.dumps(list(types))}.includes(doc.pew_inquiry_type)"
+
+
+_is_tender = _inquiry_type_in(*TENDER_INQUIRY_TYPES)
 
 
 def _chain(fields, start_after):
@@ -50,8 +84,6 @@ def _chain(fields, start_after):
 	return fields
 
 
-_tender_ref_rule = json.dumps(list(TENDER_REF_REQUIRED_FOR))
-
 OPPORTUNITY_PIPELINE_FIELDS = _chain(
 	[
 		# 1 · Cold
@@ -59,14 +91,56 @@ OPPORTUNITY_PIPELINE_FIELDS = _chain(
 		{"fieldname": "pew_expected_tender_release", "label": "Expected Tender Release Date", "fieldtype": "Date"},
 		_column("pew_stage1_cb"),
 		{"fieldname": "pew_cold_notes", "label": "Cold Stage Notes", "fieldtype": "Small Text"},
-		# 2 · Inquiry / Tender
+		# 2 · Inquiry / Tender: fixed fields for every Inquiry Type (the reused standard fields sit
+		# between these custom ones, see PIPELINE_LAYOUT_HEAD)
 		_section(2, "2 · Inquiry / Tender"),
+		_column("pew_stage2_cb0", "Classification"),
+		{
+			"fieldname": "pew_inquiry_type",
+			"label": "Inquiry Type",
+			"fieldtype": "Select",
+			"options": _options(INQUIRY_TYPES),
+			"mandatory_depends_on": stage_from(INQUIRY),
+			"in_standard_filter": 1,
+			"description": "Decides which tender fields and approvals apply.",
+		},
+		{
+			"fieldname": "pew_application_scope",
+			"label": "Application / Scope of Work",
+			"fieldtype": "Select",
+			"options": _options(
+				[
+					"Conceptual & Feasibility Studies",
+					"Multi-Disciplinary Detailed Engineering",
+					"Storage Tank Design & Engineering",
+					"Advanced Analysis & Simulation",
+					"Specialized Advisory & Brownfield",
+					"3D Modeling & Digital Solutions",
+				]
+			),
+		},
+		{
+			"fieldname": "pew_project_nature",
+			"label": "Project Nature",
+			"fieldtype": "Select",
+			"options": _options(
+				[
+					"Greenfield (New Facility)",
+					"Revamp / Routine Maintenance",
+					"Third-Party Vetting / Document Review",
+					"Pure Advisory / Conceptual Study",
+				]
+			),
+		},
+		{"fieldname": "pew_project_scope", "label": "Project Detail / Scope", "fieldtype": "Small Text"},
+		# Customer master data, not shown on the Opportunity (kept for reports and filters)
 		{
 			"fieldname": "pew_organization_type",
 			"label": "Type of Organization",
 			"fieldtype": "Select",
-			"options": "\n" + "\n".join(ORGANIZATION_TYPES),
-			"mandatory_depends_on": stage_from(INQUIRY + 1),
+			"options": _options(ORGANIZATION_TYPES),
+			"hidden": 1,
+			"mandatory_depends_on": "",
 		},
 		{
 			"fieldname": "pew_parent_customer",
@@ -74,6 +148,7 @@ OPPORTUNITY_PIPELINE_FIELDS = _chain(
 			"fieldtype": "Link",
 			"options": "Customer",
 			"read_only": 1,
+			"hidden": 1,
 			"description": "From the Customer master.",
 		},
 		{
@@ -81,19 +156,19 @@ OPPORTUNITY_PIPELINE_FIELDS = _chain(
 			"label": "Key Account",
 			"fieldtype": "Check",
 			"read_only": 1,
+			"hidden": 1,
 			"description": "From the Customer master.",
 		},
-		# the reused standard contact fields sit between these two breaks (see PIPELINE_LAYOUT_HEAD)
 		_column("pew_stage2_cb1", "Contact"),
 		_column("pew_stage2_cb2", "Deal"),
 		{
-			"fieldname": "pew_tender_ref_no",
-			"label": "Tender Ref No",
-			"fieldtype": "Data",
-			"mandatory_depends_on": (
-				f"eval:doc.pew_stage_index>={INQUIRY + 1} && "
-				f"{_tender_ref_rule}.includes(doc.pew_organization_type)"
-			),
+			"fieldname": "pew_inquiry_received_on",
+			"label": "Inquiry Received On",
+			"fieldtype": "Date",
+			# today on new forms at Inquiry / Tender, set by public/js/opportunity.js: a static default
+			# would also date a Cold deal, which has received no inquiry yet (frappe applies it on insert)
+			"default": "",
+			"mandatory_depends_on": stage_from(INQUIRY + 1),
 		},
 		{
 			"fieldname": "pew_referral_type",
@@ -112,18 +187,151 @@ OPPORTUNITY_PIPELINE_FIELDS = _chain(
 				f'eval:doc.utm_source=="{REFERRAL_LEAD_SOURCE}" && doc.pew_stage_index>={INQUIRY + 1}'
 			),
 		},
+		# replaced on the form by the standard Leading Deal Responsible (opportunity_owner); existing
+		# rows still receive the deal team's reminders
 		{
 			"fieldname": "pew_wingmen",
 			"label": "Wingman",
 			"fieldtype": "Table MultiSelect",
 			"options": "PEW Opportunity Wingman",
+			"hidden": 1,
+		},
+		# 2 · Tender Details: the three tender Inquiry Types
+		_sub_section(INQUIRY, "tender", "Tender Details", _is_tender),
+		{
+			"fieldname": "pew_tender_ref_no",
+			"label": "Tender / Bid Ref No",
+			"fieldtype": "Data",
+			"mandatory_depends_on": f"eval:doc.pew_stage_index>={INQUIRY + 1} && {_is_tender}",
 		},
 		{
-			"fieldname": "pew_inquiry_received_on",
-			"label": "Inquiry Received On",
-			"fieldtype": "Date",
-			"mandatory_depends_on": stage_from(INQUIRY + 1),
+			"fieldname": "pew_procurement_portal",
+			"label": "Procurement Portal",
+			"fieldtype": "Select",
+			"options": _options(["SAP Ariba", "Coupa", "Client Custom Portal", "Email"]),
+			"depends_on": f"eval:{_inquiry_type_in(CORPORATE_TENDER)}",
 		},
+		{
+			"fieldname": "pew_end_client",
+			"label": "End Client / Ultimate Owner",
+			"fieldtype": "Link",
+			"options": "Customer",
+			"depends_on": f"eval:{_inquiry_type_in(CONSORTIUM_BID)}",
+			"description": "The project owner; Inquiry From is the bidding partner.",
+		},
+		{
+			"fieldname": "pew_credential_sharing",
+			"label": "Credential Sharing Mode",
+			"fieldtype": "Select",
+			"options": _options(["Using our credentials", "Using partner credentials"]),
+			"depends_on": f"eval:{_inquiry_type_in(CONSORTIUM_BID)}",
+		},
+		# the bid submission deadline: reminders and the Kanban card use this fieldname
+		{
+			"fieldname": "pew_bid_submission_deadline",
+			"label": "Due Date & Time",
+			"fieldtype": "Datetime",
+			"mandatory_depends_on": f"eval:doc.pew_stage_index>={QUALIFICATION + 1} && {_is_tender}",
+		},
+		{
+			"fieldname": "pew_execution_period",
+			"label": "Execution Period",
+			"fieldtype": "Data",
+			"description": "e.g. 12 Months",
+		},
+		_column("pew_stage2_tender_cb1", "Pre-Qualification"),
+		{
+			"fieldname": "pew_pqc_financial",
+			"label": "PQC - Financial (Bidder Turnover)",
+			"fieldtype": "Currency",
+			"options": "currency",
+		},
+		{"fieldname": "pew_pqc_technical", "label": "PQC - Technical", "fieldtype": "Small Text"},
+		_column("pew_stage2_tender_cb2", "Bid Conditions"),
+		{
+			"fieldname": "pew_reverse_auction",
+			"label": "Reverse Auction (RA)",
+			"fieldtype": "Select",
+			"options": _YES_NO,
+		},
+		{
+			"fieldname": "pew_ra_details",
+			"label": "RA Details",
+			"fieldtype": "Small Text",
+			"depends_on": 'eval:doc.pew_reverse_auction=="Yes"',
+		},
+		{"fieldname": "pew_emd_exemption", "label": "EMD Exemption", "fieldtype": "Select", "options": _YES_NO},
+		{
+			"fieldname": "pew_emd_amount",
+			"label": "EMD Amount",
+			"fieldtype": "Currency",
+			"options": "currency",
+			"depends_on": 'eval:doc.pew_emd_exemption=="No"',
+		},
+		{
+			"fieldname": "pew_pbg_required",
+			"label": "Performance Bank Guarantee (PBG)",
+			"fieldtype": "Select",
+			"options": _YES_NO,
+		},
+		{
+			"fieldname": "pew_pbg_value",
+			"label": "PBG Value / Percentage",
+			"fieldtype": "Data",
+			"depends_on": 'eval:doc.pew_pbg_required=="Yes"',
+		},
+		{
+			"fieldname": "pew_request_bid_approval",
+			"label": "Request Bid Approval?",
+			"fieldtype": "Check",
+			# locked once management has decided; a Sales Manager can set the decision back to Pending
+			"read_only_depends_on": f'eval:["{BID_APPROVED}", "{BID_DECLINED}"].includes(doc.pew_bid_decision)',
+			"description": "Sends the details above to management for a Bid Decision.",
+			# a duplicated tender asks for (and gets) its own approval
+			"no_copy": 1,
+		},
+		# 2 · Management Decision: once the team has requested approval
+		_sub_section(INQUIRY, "approval", "Management Decision", f"{_is_tender} && doc.pew_request_bid_approval"),
+		{
+			"fieldname": "pew_bid_decision",
+			"label": "Bid Decision (Go / No-Go)",
+			"fieldtype": "Select",
+			"options": _options(BID_DECISIONS),
+			"permlevel": MANAGEMENT_PERMLEVEL,
+			"no_copy": 1,
+			"description": f"{BID_DECLINED} offers to declare the Opportunity Lost.",
+		},
+		{
+			"fieldname": "pew_pqc_document",
+			"label": "PQC-Doc (Verification Proof)",
+			"fieldtype": "Attach",
+			"permlevel": MANAGEMENT_PERMLEVEL,
+			"no_copy": 1,
+		},
+		_column("pew_stage2_approval_cb1"),
+		{
+			"fieldname": "pew_bid_target_date",
+			"label": "Bid Target Date",
+			"fieldtype": "Date",
+			"permlevel": MANAGEMENT_PERMLEVEL,
+			"no_copy": 1,
+			"description": "Internal target to finalize the submission.",
+		},
+		{
+			"fieldname": "pew_submission_mode",
+			"label": "Submission Mode",
+			"fieldtype": "Select",
+			"options": _options(["Online Portal", "GeM", "Email", "Physical"]),
+			"permlevel": MANAGEMENT_PERMLEVEL,
+			"no_copy": 1,
+		},
+		# 2 · Release Order Details: call-offs under a rate contract
+		_sub_section(INQUIRY, "release", "Release Order Details", _inquiry_type_in(RATE_CONTRACT)),
+		{"fieldname": "pew_master_contract_ref", "label": "Master ARC / Contract Ref No", "fieldtype": "Data"},
+		_column("pew_stage2_release_cb1"),
+		{"fieldname": "pew_release_order_no", "label": "Call-Off / Release Order No", "fieldtype": "Data"},
+		_column("pew_stage2_release_cb2"),
+		{"fieldname": "pew_sla_deadline", "label": "SLA / Turnaround Deadline", "fieldtype": "Date"},
 		# 3 · Qualification (Go / No-Go)
 		_section(3, "3 · Qualification (Go / No-Go)"),
 		{
@@ -131,12 +339,6 @@ OPPORTUNITY_PIPELINE_FIELDS = _chain(
 			"label": "Tender / RFQ Documents",
 			"fieldtype": "Table",
 			"options": "PEW Opportunity Document",
-			"mandatory_depends_on": stage_from(QUALIFICATION + 1),
-		},
-		{
-			"fieldname": "pew_bid_submission_deadline",
-			"label": "Bid Submission Deadline",
-			"fieldtype": "Datetime",
 			"mandatory_depends_on": stage_from(QUALIFICATION + 1),
 		},
 		{"fieldname": "pew_query_deadline", "label": "Query / RFI Deadline", "fieldtype": "Datetime"},
@@ -335,7 +537,8 @@ OPPORTUNITY_FIELDS = [
 		"fieldtype": "Int",
 		"hidden": 1,
 		"read_only": 1,
-		"default": "1",
+		# the default stage's (Inquiry / Tender): forms mapped from a Customer or Lead never fetch it
+		"default": str(INQUIRY),
 		"fetch_from": "sales_stage.pew_stage_order",
 		"insert_after": "sales_stage",
 	},
@@ -416,25 +619,47 @@ CUSTOM_FIELDS = {
 OPPORTUNITY_PROPERTY_SETTERS = [
 	("sales_stage", "default", DEFAULT_STAGE, "Data"),
 	("sales_stage", "reqd", "1", "Check"),
-	("market_segment", "label", "Market Segment / Application Type", "Data"),
+	# Inquiry From (Organization) is always a Customer (enforced in crm.opportunity.validate). It locks
+	# once it is one, so an older Lead-based Opportunity can still be pointed at its Customer. The form
+	# label is set again in public/js/opportunity.js: ERPNext relabels Party on every refresh.
+	("opportunity_from", "default", "Customer", "Data"),
+	("opportunity_from", "read_only_depends_on", 'eval:doc.opportunity_from=="Customer"', "Code"),
+	("party_name", "label", "Inquiry From (Organization)", "Data"),
+	("market_segment", "label", "Market Segment", "Data"),
 	("market_segment", "mandatory_depends_on", stage_from(INQUIRY + 1), "Code"),
 	("contact_person", "mandatory_depends_on", stage_from(INQUIRY + 1), "Code"),
+	# Contact details come from the selected Contact: picking one refreshes them (ERPNext for email and
+	# mobile, public/js/opportunity.js for job title and phone); the server fills them only while empty,
+	# so values typed before they became read-only are kept
 	("job_title", "fetch_from", "contact_person.designation", "Small Text"),
 	("job_title", "fetch_if_empty", "1", "Check"),
+	("job_title", "read_only", "1", "Check"),
+	("contact_email", "fetch_from", "contact_person.email_id", "Small Text"),
+	("contact_email", "fetch_if_empty", "1", "Check"),
+	("contact_email", "read_only", "1", "Check"),
+	("contact_mobile", "fetch_from", "contact_person.mobile_no", "Small Text"),
+	("contact_mobile", "fetch_if_empty", "1", "Check"),
+	("contact_mobile", "read_only", "1", "Check"),
 	("phone", "fetch_from", "contact_person.phone", "Small Text"),
 	("phone", "fetch_if_empty", "1", "Check"),
-	("customer_address", "hidden", "0", "Check"),
-	("address_display", "hidden", "0", "Check"),
+	("phone", "read_only", "1", "Check"),
+	# Customer master data, not shown on the Opportunity. Kept as setters (rather than dropped) because
+	# fixture sync never deletes a Property Setter that leaves the fixtures.
+	("customer_address", "hidden", "1", "Check"),
+	("address_display", "hidden", "1", "Check"),
+	("website", "hidden", "1", "Check"),
 	("title", "hidden", "0", "Check"),
 	("title", "label", "Opportunity Name", "Data"),
 	("title", "bold", "1", "Check"),
-	("title", "mandatory_depends_on", stage_from(INQUIRY + 1), "Code"),
+	("title", "mandatory_depends_on", stage_from(INQUIRY), "Code"),
 	("opportunity_amount", "label", "Estimated Value", "Data"),
 	("expected_closing", "label", "Expected Award Date", "Data"),
-	("utm_source", "label", "Lead Source", "Data"),
+	("utm_source", "label", "Marketing / Lead Source", "Data"),
 	("utm_source", "mandatory_depends_on", stage_from(INQUIRY + 1), "Code"),
 	("opportunity_owner", "label", "Leading Deal Responsible", "Data"),
 	("opportunity_owner", "mandatory_depends_on", stage_from(INQUIRY + 1), "Code"),
+	# the field sits in Stage 2, hidden on Cold deals, whose Tender Release Follow-up goes to it
+	("opportunity_owner", "default", "__user", "Data"),
 	("lost_reasons", "label", "Loss Reason(s)", "Data"),
 	("competitors", "label", "Competitor(s) Who Won", "Data"),
 ]
@@ -461,16 +686,21 @@ LOST_LAYOUT = [
 	"competitors",
 ]
 
-# The EPC Pipeline tab, last (after Connections): this block, followed by the stage 3-7 fields in
-# spec order.
+# The EPC Pipeline tab, last (after Connections): this block (stage 1 and the fixed Stage 2 fields),
+# followed by the Stage 2 Inquiry Type blocks and the stage 3-7 fields in spec order.
 PIPELINE_LAYOUT_HEAD = [
 	"pew_pipeline_tab",
 	"pew_stage1_section",
 	"pew_expected_tender_release",
-	"market_segment",
 	"pew_stage1_cb",
 	"pew_cold_notes",
 	"pew_stage2_section",
+	"pew_stage2_cb0",
+	"pew_inquiry_type",
+	"market_segment",
+	"pew_application_scope",
+	"pew_project_nature",
+	"pew_project_scope",
 	"pew_organization_type",
 	"pew_parent_customer",
 	"pew_is_key_account",
@@ -485,19 +715,20 @@ PIPELINE_LAYOUT_HEAD = [
 	"phone",
 	"pew_stage2_cb2",
 	"title",
-	"pew_tender_ref_no",
-	"opportunity_amount",
+	"pew_inquiry_received_on",
 	"utm_source",
 	"pew_referral_type",
 	"pew_referral_from",
+	"opportunity_owner",
 	"pew_wingmen",
-	"pew_inquiry_received_on",
+	"opportunity_amount",
+	"expected_closing",
 ]
 
 
 def get_pipeline_layout():
 	names = [f["fieldname"] for f in OPPORTUNITY_PIPELINE_FIELDS]
-	return PIPELINE_LAYOUT_HEAD + names[names.index("pew_inquiry_received_on") + 1 :]
+	return PIPELINE_LAYOUT_HEAD + names[names.index("pew_wingmen") + 1 :]
 
 
 def build_field_order(standard_order):

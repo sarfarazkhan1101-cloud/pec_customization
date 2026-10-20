@@ -13,6 +13,7 @@ from frappe.utils import cint, flt, getdate, today
 from pew_customizations.crm.config import (
 	ACTIVE_STATUSES,
 	ATTACH_FIELD_CATEGORIES,
+	BID_PENDING,
 	COLD_STAGE,
 	DEFAULT_STAGE,
 	DOCUMENT_CLASSES,
@@ -21,6 +22,7 @@ from pew_customizations.crm.config import (
 	EXIT_GATES,
 	LOST_TAG,
 	MANAGER_ROLES,
+	MARKET_SEGMENTS,
 	PIPELINE_STAGES,
 	PROJECT_NAMING_SERIES,
 	RESTRICTED_DOCUMENT_TYPE,
@@ -108,6 +110,12 @@ def validate(doc, method=None):
 		frappe.throw(_("Use Declare Lost to close an Opportunity that is not being pursued."))
 
 	if not _skip_rules():
+		_validate_party(doc)
+		# ERPNext copies the Customer's Market Segment into an Opportunity whenever it is empty; an older
+		# value is dropped before the gates run, so the deal is classified with the current list
+		# (Opportunities that already hold an older one keep it)
+		if doc.market_segment not in MARKET_SEGMENTS and doc.has_value_changed("market_segment"):
+			doc.market_segment = None
 		_validate_stage_move(doc, idx, old_idx)
 
 	if idx == WON:
@@ -115,10 +123,27 @@ def validate(doc, method=None):
 	elif doc.status == "Converted" and old_idx == WON:
 		doc.status = "Open"
 
+	# runs after frappe reset a Sales User's edits to the permlevel 2 Bid Decision, so it is kept
+	if doc.pew_request_bid_approval and not doc.pew_bid_decision:
+		doc.pew_bid_decision = BID_PENDING
+
 	_stamp_document_rows(doc)
 	_mirror_customer_fields(doc)
 	_validate_values(doc)
 	_warn_on_risky_go(doc)
+
+
+def _validate_party(doc):
+	"""Inquiry From is always a Customer. Opportunities made on a Lead before this rule keep working
+	until they are converted with Create > Customer (crm/customer.py moves them onto the Customer)."""
+	if doc.opportunity_from == "Customer" or not (doc.is_new() or doc.has_value_changed("opportunity_from")):
+		return
+	frappe.throw(
+		_(
+			"An Opportunity must be made for a Customer. Create the Customer first (on a Lead: Create > Customer), then create the Opportunity from it."
+		),
+		title=_("Customer required"),
+	)
 
 
 def _validate_lost(doc, old_status, idx, old_idx):
@@ -182,13 +207,15 @@ def _stamp_document_rows(doc):
 
 
 def _mirror_customer_fields(doc):
-	"""Parent company and key account are Customer master data: always refresh them. Type of
-	Organization is copied only when empty (standard map_fields) because it is editable here."""
+	"""Type of Organization, parent company and key account are Customer master data (hidden on the
+	Opportunity): refresh them. A Type of Organization the Customer does not have yet is kept."""
 	if doc.opportunity_from != "Customer" or not doc.party_name:
 		return
-	parent, key_account = frappe.get_cached_value(
-		"Customer", doc.party_name, ["pew_parent_customer", "pew_is_key_account"]
+	organization_type, parent, key_account = frappe.get_cached_value(
+		"Customer", doc.party_name, ["pew_organization_type", "pew_parent_customer", "pew_is_key_account"]
 	)
+	if organization_type:
+		doc.pew_organization_type = organization_type
 	doc.pew_parent_customer = parent
 	doc.pew_is_key_account = cint(key_account)
 

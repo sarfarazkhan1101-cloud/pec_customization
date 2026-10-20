@@ -16,12 +16,18 @@ from frappe.custom.doctype.property_setter.property_setter import make_property_
 from frappe.permissions import add_permission, update_permission_property
 
 from pew_customizations.crm.config import (
+	BID_APPROVED,
+	BID_DECLINED,
+	DIRECT_INQUIRY,
 	KANBAN_BOARD,
 	KANBAN_CARD_FIELDS,
 	KANBAN_INDICATORS,
 	LEAD_SOURCES,
 	LOST_REASONS,
+	MARKET_SEGMENTS,
+	NOTIFICATION_BID_APPROVAL_REQUESTED,
 	NOTIFICATION_BID_DEADLINE,
+	NOTIFICATION_BID_DECISION,
 	NOTIFICATION_BID_VALIDITY,
 	NOTIFICATION_PROJECT_REVIEW,
 	NOTIFICATION_QUERY_DEADLINE,
@@ -30,10 +36,12 @@ from pew_customizations.crm.config import (
 	PROJECT_APPROVED_STATE,
 	PROPOSAL,
 	QUERIES,
+	RATE_CONTRACT,
 	SALES_STAGE_ORDER,
 )
 from pew_customizations.crm.customizations import (
 	CUSTOM_FIELDS,
+	MANAGEMENT_PERMLEVEL,
 	OPPORTUNITY_DOCTYPE_PROPERTY_SETTERS,
 	OPPORTUNITY_PROPERTY_SETTERS,
 	PROJECT_PROPERTY_SETTERS,
@@ -42,6 +50,7 @@ from pew_customizations.crm.customizations import (
 
 PROJECT_APPROVAL_WORKFLOW = "Project Approval Workflow"
 WORK_ORDER_ROLE = "Sales Manager"
+SALES_USER_READ_DOCTYPES = ("Sales Stage", "Market Segment")
 
 
 def apply_customizations():
@@ -51,9 +60,11 @@ def apply_customizations():
 	create_custom_fields(CUSTOM_FIELDS, update=True)
 	apply_property_setters()
 	ensure_sales_stages()
+	ensure_sales_user_read()
 	ensure_masters()
 	ensure_notifications()
 	ensure_work_order_permissions()
+	ensure_management_permissions()
 	ensure_project_workflow_roles()
 	ensure_tender_kanban()
 	frappe.db.commit()
@@ -97,6 +108,16 @@ def ensure_sales_stages():
 	)
 
 
+def ensure_sales_user_read():
+	"""Sales Users pick these on every Opportunity (Sales Stage also fetches its pipeline order, and
+	Market Segment is needed to leave Inquiry / Tender), but standard ERPNext lets only Sales Managers
+	read them: a Sales User's new Opportunity failed with a permission error. The first custom rule
+	copies the standard ones into Custom DocPerm (exported as fixtures)."""
+	for doctype in SALES_USER_READ_DOCTYPES:
+		if not frappe.db.exists("Custom DocPerm", {"parent": doctype, "role": "Sales User", "permlevel": 0}):
+			add_permission(doctype, "Sales User", permlevel=0)
+
+
 def ensure_masters():
 	for reason in LOST_REASONS:
 		if not frappe.db.exists("Opportunity Lost Reason", reason):
@@ -108,6 +129,9 @@ def ensure_masters():
 			doc = frappe.new_doc("UTM Source")
 			doc.name = source
 			doc.insert(ignore_permissions=True)
+	for segment in MARKET_SEGMENTS:
+		if not frappe.db.exists("Market Segment", segment):
+			frappe.get_doc({"doctype": "Market Segment", "market_segment": segment}).insert(ignore_permissions=True)
 
 
 def _notification_specs():
@@ -137,7 +161,11 @@ def _notification_specs():
 			"event": "Days Before",
 			"date_changed": "pew_bid_submission_deadline",
 			"days_in_advance": 2,
-			"condition": f"{active} and doc.pew_stage_index < {PROPOSAL}",
+			# Due Date & Time shows only for tenders
+			"condition": (
+				f"{active} and doc.pew_stage_index < {PROPOSAL} "
+				f'and doc.pew_inquiry_type not in ("{DIRECT_INQUIRY}", "{RATE_CONTRACT}")'
+			),
 			"subject": "Bid for {{ doc.title or doc.name }} is due in 2 days",
 			"message": f"<p>The bid for {link} must be submitted by "
 			"{{ frappe.utils.format_datetime(doc.pew_bid_submission_deadline) }}.</p>",
@@ -178,6 +206,30 @@ def _notification_specs():
 			"Review it, add the Execution Team and approve it.</p>",
 			"recipients": [{"receiver_by_role": "Projects Manager"}],
 		},
+		{
+			"name": NOTIFICATION_BID_APPROVAL_REQUESTED,
+			"document_type": "Opportunity",
+			# "Save" rather than "Value Change", which Frappe skips on insert: the request can be ticked
+			# before the first save
+			"event": "Save",
+			"value_changed": None,
+			"condition": f'{active} and doc.pew_request_bid_approval and doc.has_value_changed("pew_request_bid_approval")',
+			"subject": "Bid approval requested for {{ doc.title or doc.name }}",
+			"message": f"<p>The team asks for a Bid Decision on {link} ({{{{ doc.customer_name or doc.party_name }}}}, "
+			"{{ doc.pew_inquiry_type }}). Review the Tender Details on the EPC Pipeline tab and set the Bid "
+			"Decision in the Management Decision section.</p>",
+			"recipients": [{"receiver_by_role": "Sales Manager"}],
+		},
+		{
+			"name": NOTIFICATION_BID_DECISION,
+			"document_type": "Opportunity",
+			"event": "Value Change",
+			"value_changed": "pew_bid_decision",
+			"condition": f'{active} and doc.pew_bid_decision in ("{BID_APPROVED}", "{BID_DECLINED}")',
+			"subject": "Bid Decision for {{ doc.title or doc.name }}: {{ doc.pew_bid_decision }}",
+			"message": f"<p>Management set the Bid Decision on {link} to <b>{{{{ doc.pew_bid_decision }}}}</b>.</p>",
+			"recipients": [{"receiver_by_document_field": "opportunity_owner"}],
+		},
 	]
 
 
@@ -207,6 +259,17 @@ def ensure_work_order_permissions():
 	if not frappe.db.exists("Custom DocPerm", {"parent": "Opportunity", "role": WORK_ORDER_ROLE, "permlevel": 1}):
 		add_permission("Opportunity", WORK_ORDER_ROLE, permlevel=1)
 	update_permission_property("Opportunity", WORK_ORDER_ROLE, 1, "write", 1)
+
+
+def ensure_management_permissions():
+	"""Permission level 2 (the Management Decision: Bid Decision, PQC-Doc, Bid Target Date, Submission
+	Mode): Sales Users see it, Sales Managers decide. Frappe resets level-2 values a Sales User sends."""
+	for role in ("Sales User", "Sales Manager"):
+		if not frappe.db.exists(
+			"Custom DocPerm", {"parent": "Opportunity", "role": role, "permlevel": MANAGEMENT_PERMLEVEL}
+		):
+			add_permission("Opportunity", role, permlevel=MANAGEMENT_PERMLEVEL)
+	update_permission_property("Opportunity", "Sales Manager", MANAGEMENT_PERMLEVEL, "write", 1)
 
 
 def ensure_project_workflow_roles():

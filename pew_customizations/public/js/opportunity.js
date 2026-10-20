@@ -13,16 +13,40 @@ const PEW_STAGES = [
 	"Closure (Won)",
 ];
 const PEW_WON = PEW_STAGES.length;
+const PEW_INQUIRY = 2;
+
+// Mirrors MARKET_SEGMENTS in crm/config.py (a test keeps them in sync): older Market Segments stay
+// on existing documents but are no longer offered.
+const PEW_MARKET_SEGMENTS = [
+	"Refineries & Petrochemicals",
+	"Terminals & Tank Farms",
+	"Pipelines & Marine",
+	"Green Energy & Transition",
+	"Power Plants & Utilities",
+];
 
 frappe.ui.form.on("Opportunity", {
 	setup(frm) {
 		frm.set_query("sales_stage", () => ({ filters: { pew_stage_order: [">", 0] } }));
+		frm.set_query("market_segment", () => ({ filters: { name: ["in", PEW_MARKET_SEGMENTS] } }));
+		// replaces ERPNext's Customer / Lead / Prospect: only an older Lead-based Opportunity can still
+		// change it (crm/opportunity.py refuses anything but Customer)
+		frm.set_query("opportunity_from", () => ({ filters: { name: "Customer" } }));
 	},
 
 	refresh(frm) {
 		const info = pew_pipeline_info(frm);
 		frm.pew_saved_stage = frm.doc.sales_stage;
 
+		// a fixed list: not extended from the Opportunity (not settable through Customize Form)
+		frm.set_df_property("market_segment", "only_select", 1);
+		// a form mapped from a Customer or Lead never fetches its stage's index, and the stage sections
+		// (Inquiry Type with them) depend on it
+		const stage = pew_stage_number(frm.doc.sales_stage);
+		if (frm.is_new() && stage && cint(frm.doc.pew_stage_index) !== stage) {
+			frm.set_value("pew_stage_index", stage);
+		}
+		if (frm.is_new()) pew_default_received_on(frm);
 		pew_sort_stage_options(frm);
 		pew_render_stage_progress(frm);
 		pew_show_checklist(frm, info);
@@ -32,6 +56,7 @@ frappe.ui.form.on("Opportunity", {
 
 	sales_stage(frm) {
 		pew_render_stage_progress(frm);
+		pew_default_received_on(frm);
 
 		const from = pew_stage_number(frm.pew_saved_stage);
 		const to = pew_stage_number(frm.doc.sales_stage);
@@ -47,6 +72,22 @@ frappe.ui.form.on("Opportunity", {
 		pew_show_current_stage(frm);
 	},
 
+	contact_person(frm) {
+		// ERPNext refreshes email and mobile from the new Contact; Job Title and Phone are fetched only
+		// while empty (crm/customizations.py), so they are refreshed here
+		if (!frm.doc.contact_person) {
+			frm.set_value({ job_title: "", phone: "" });
+			return;
+		}
+		frappe.db
+			.get_value("Contact", frm.doc.contact_person, ["designation", "phone"])
+			.then(({ message }) => {
+				if (message) {
+					frm.set_value({ job_title: message.designation || "", phone: message.phone || "" });
+				}
+			});
+	},
+
 	party_name(frm) {
 		if (frm.doc.opportunity_from !== "Customer" || !frm.doc.party_name) return;
 		frappe.db
@@ -57,7 +98,7 @@ frappe.ui.form.on("Opportunity", {
 			])
 			.then(({ message }) => {
 				if (!message) return;
-				if (!frm.doc.pew_organization_type && message.pew_organization_type) {
+				if (message.pew_organization_type) {
 					frm.set_value("pew_organization_type", message.pew_organization_type);
 				}
 				frm.set_value("pew_parent_customer", message.pew_parent_customer || "");
@@ -65,10 +106,24 @@ frappe.ui.form.on("Opportunity", {
 			});
 	},
 
+	// ERPNext labels Party after Opportunity From ("Customer") on every refresh; this handler runs
+	// right after ERPNext's own.
+	set_dynamic_field_label(frm) {
+		frm.set_df_property("party_name", "label", __("Inquiry From (Organization)"));
+	},
+
 	pew_go_no_go(frm) {
 		if (frm.doc.pew_go_no_go !== "No-Go" || frm.is_new()) return;
 		frappe.confirm(__("The decision is No-Go. Save and declare this Opportunity Lost now?"), () =>
 			frm.save().then(() => frm.trigger("set_as_lost_dialog"))
+		);
+	},
+
+	pew_bid_decision(frm) {
+		if (frm.doc.pew_bid_decision !== "Declined / No-Bid" || frm.is_new()) return;
+		frappe.confirm(
+			__("The Bid Decision is Declined / No-Bid. Save and declare this Opportunity Lost now?"),
+			() => frm.save().then(() => frm.trigger("set_as_lost_dialog"))
 		);
 	},
 });
@@ -372,6 +427,14 @@ function pew_move_to_stage(frm, to) {
 
 	const from = pew_stage_number(frm.doc.sales_stage);
 	if (to === from) return; // already there, e.g. after saving a stage picked in the dropdown
+
+	// Inquiry Type is required from Inquiry / Tender on, but its section stays hidden until the deal
+	// is there: set the stage in the form so the section opens, and the user saves once it is filled
+	if (from < PEW_INQUIRY && to >= PEW_INQUIRY && !frm.doc.pew_inquiry_type) {
+		frm.set_value("sales_stage", stage);
+		return;
+	}
+
 	const allowed =
 		to > from
 			? pew_confirm_forward_move(frm, from, to)
@@ -393,17 +456,30 @@ function pew_move_to_stage(frm, to) {
 	);
 }
 
-// Opens the current stage's section on the EPC Pipeline tab and collapses the others. The sections'
-// collapsible_depends_on does this on load, but Frappe only re-evaluates it on refresh.
+// Inquiry Received On defaults to today on a new Opportunity at Inquiry / Tender, and on a Cold deal
+// once it moves on; a deal at Cold has received no inquiry yet, so a new one is left without a date.
+function pew_default_received_on(frm) {
+	const at_inquiry = pew_stage_number(frm.doc.sales_stage) >= PEW_INQUIRY;
+	const from_cold = frm.is_new() || pew_stage_number(frm.pew_saved_stage) < PEW_INQUIRY;
+	if (frm.is_new() && !at_inquiry && frm.doc.pew_inquiry_received_on) {
+		frm.set_value("pew_inquiry_received_on", "");
+	} else if (at_inquiry && from_cold && !frm.doc.pew_inquiry_received_on) {
+		frm.set_value("pew_inquiry_received_on", frappe.datetime.get_today());
+	}
+}
+
+// Opens the current stage's sections on the EPC Pipeline tab and collapses the others. The sections'
+// collapsible_depends_on does this on load, but Frappe only re-evaluates it on refresh. A stage can
+// have blocks of its own (pew_stage2_tender_section, ...), which open and close with it.
 function pew_show_current_stage(frm) {
 	const current = cint(frm.doc.pew_stage_index);
 	const section = frm.fields_dict[`pew_stage${current}_section`];
 	if (!section) return;
 
-	for (let idx = 1; idx <= PEW_WON; idx++) {
-		const other = frm.fields_dict[`pew_stage${idx}_section`];
+	for (const [fieldname, other] of Object.entries(frm.fields_dict)) {
+		const match = /^pew_stage(\d+)_(?:[a-z]+_)?section$/.exec(fieldname);
 		// like on refresh, a section with missing mandatory fields stays open
-		if (other) other.collapse(idx !== current && !other.has_missing_mandatory());
+		if (match) other.collapse(cint(match[1]) !== current && !other.has_missing_mandatory());
 	}
 	// a new Opportunity fetches the index from the default stage on load, so it stays on Details
 	if (frm.is_new()) return;

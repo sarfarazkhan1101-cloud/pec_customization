@@ -11,3 +11,4 @@ pew_customizations.patches.crm_v2_sales_stages
 pew_customizations.patches.crm_v2_loi_issued_flag
 pew_customizations.patches.remove_task_dependencies
 pew_customizations.patches.migrate_dci_revisions_to_tasks
+pew_customizations.patches.crm_inquiry_type_backfill

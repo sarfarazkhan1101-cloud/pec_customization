@@ -18,6 +18,7 @@ from frappe.utils import add_days, getdate, today
 from openpyxl import load_workbook
 
 from pew_customizations.api.dci_export import build_dci_workbook, download_dci_xlsx
+from pew_customizations.crm.config import DIRECT_INQUIRY
 from pew_customizations.crm.opportunity import create_project
 from pew_customizations.patches import migrate_dci_revisions_to_tasks as dci_patch
 from pew_customizations.pew_customizations.report.pec_dci_report.pec_dci_report import execute, get_dci_data
@@ -126,6 +127,7 @@ class TestTaskRevisions(IntegrationTestCase):
 				"party_name": customer.name,
 				"company": self.company,
 				"title": f"DCI handoff {frappe.generate_hash(length=6)}",
+				"pew_inquiry_type": DIRECT_INQUIRY,
 			}
 		).insert(ignore_permissions=True)
 
@@ -458,39 +460,41 @@ class TestTaskRevisions(IntegrationTestCase):
 		self.assertEqual(workbook.sheetnames, ["DCI", "Code Summary"])
 		sheet = workbook["DCI"]
 
-		# project header block
+		# project header block; no Client 1 ... 5 rows while they are empty
 		self.assertEqual(
-			[(sheet.cell(row=n, column=1).value, sheet.cell(row=n, column=3).value) for n in range(1, 6)],
+			[(sheet.cell(row=n, column=1).value, sheet.cell(row=n, column=3).value) for n in range(1, 8)],
 			[
 				("Project Number", dci.project.name),
 				("Project Name", dci.project.project_name),
 				("Project Type", None),
 				("Client Name", None),
 				("End User Name", "Coastal Terminal Operator"),
+				("Consultant", None),
+				(None, None),
 			],
 		)
 
-		# row 7: one merged header per revision and for Latest Status; row 8: their columns
+		# row 8: one merged header per revision and for Latest Status; row 9: their columns
 		merged = {str(cells) for cells in sheet.merged_cells.ranges}
-		self.assertTrue({"A7:A8", "G7:G8", "H7:J7", "AL7:AN7", "AO7:AS7"} <= merged)
+		self.assertTrue({"A8:A9", "G8:G9", "H8:J8", "AL8:AN8", "AO8:AS8"} <= merged)
 		self.assertEqual(
-			(sheet["H7"].value, sheet["AL7"].value, sheet["AO7"].value), ("R0", "R10", "Latest Status")
+			(sheet["H8"].value, sheet["AL8"].value, sheet["AO8"].value), ("R0", "R10", "Latest Status")
 		)
 		self.assertEqual(
-			[sheet.cell(row=8, column=n).value for n in range(8, 11)],
+			[sheet.cell(row=9, column=n).value for n in range(8, 11)],
 			["Submission Date", "Received Date", "Approval Code"],
 		)
-		self.assertEqual(sheet["AS8"].value, "Status")
-		self.assertTrue(sheet["H7"].font.bold)
-		self.assertEqual(sheet["H7"].border.left.style, "thin")
-		self.assertEqual(sheet.freeze_panes, "H9")
+		self.assertEqual(sheet["AS9"].value, "Status")
+		self.assertTrue(sheet["H8"].font.bold)
+		self.assertEqual(sheet["H8"].border.left.style, "thin")
+		self.assertEqual(sheet.freeze_panes, "H10")
 
 		# one row per document, same order and values as the report
-		self.assertEqual(sheet.max_row, 12)
-		self.assertEqual([sheet.cell(row=10, column=n).value for n in (1, 3, 4)], [2, "P-PIP-002", "Layout"])
-		self.assertEqual(sheet["H10"].value.date(), getdate(add_days(today(), -9)))
-		self.assertEqual((sheet["J10"].value, sheet["M10"].value), ("3", "1"))
-		self.assertEqual(sheet["AS10"].value, "Approved (R1, Code 1)")
+		self.assertEqual(sheet.max_row, 13)
+		self.assertEqual([sheet.cell(row=11, column=n).value for n in (1, 3, 4)], [2, "P-PIP-002", "Layout"])
+		self.assertEqual(sheet["H11"].value.date(), getdate(add_days(today(), -9)))
+		self.assertEqual((sheet["J11"].value, sheet["M11"].value), ("3", "1"))
+		self.assertEqual(sheet["AS11"].value, "Approved (R1, Code 1)")
 
 		summary = [[cell.value for cell in row] for row in workbook["Code Summary"].iter_rows()]
 		self.assertEqual(summary[0], ["Approval Code", "Description", "Documents"])
@@ -499,8 +503,60 @@ class TestTaskRevisions(IntegrationTestCase):
 
 		# one Scope only
 		sheet = load_workbook(BytesIO(build_dci_workbook(dci.project.name, dci.civil.name)))["DCI"]
-		self.assertEqual((sheet["A6"].value, sheet["C6"].value), ("Scope", "Civil"))
-		self.assertEqual(sheet.max_row, 9)
+		self.assertEqual((sheet["A7"].value, sheet["C7"].value), ("Scope", "Civil"))
+		self.assertEqual(sheet.max_row, 11)
+
+	def test_client_format_header_lists_consultant_and_filled_clients(self):
+		dci = self.dci_project()
+		project = frappe.get_doc("Project", dci.project.name)
+		project.update({"consultant": "M K ROY", "client_1": "xyz", "client_3": "NRL"})
+		project.save(ignore_permissions=True)
+
+		sheet = load_workbook(BytesIO(build_dci_workbook(project.name, dci.civil.name)))["DCI"]
+		self.assertEqual(
+			[(sheet.cell(row=n, column=1).value, sheet.cell(row=n, column=3).value) for n in range(4, 11)],
+			[
+				("Client Name", None),
+				("End User Name", "Coastal Terminal Operator"),
+				("Consultant", "M K ROY"),
+				("Client 1", "xyz"),
+				("Client 3", "NRL"),
+				("Scope", "Civil"),
+				(None, None),
+			],
+		)
+		# the table starts below the longer header
+		self.assertEqual((sheet["A11"].value, sheet["H11"].value), ("Sr. No.", "R0"))
+		self.assertEqual(sheet["H12"].value, "Submission Date")
+		self.assertEqual(sheet.freeze_panes, "H13")
+		self.assertEqual(sheet["C13"].value, "P-CIV-001")
+		self.assertEqual(sheet.max_row, 13)
+
+	def test_project_client_fields_follow_consultant(self):
+		fields = [df.fieldname for df in frappe.get_meta("Project").fields]
+		self.assertEqual(
+			fields[fields.index("pec_details_tab") : fields.index("pec_input_section") + 1],
+			[
+				"pec_details_tab",
+				"pec_team_section",
+				"project_manager",
+				"pec_details_column_break",
+				"project_folder_link",
+				"sharepoint_link",
+				"pec_client_section",
+				"end_user",
+				"pec_client_column_break",
+				"consultant",
+				"pec_clients_section",
+				"client_1",
+				"client_2",
+				"client_3",
+				"pec_clients_column_break",
+				"client_4",
+				"client_5",
+				"pec_input_section",
+			],
+		)
 
 	def test_draftsman_can_view_but_not_export(self):
 		dci = self.dci_project()

@@ -2,50 +2,36 @@
  {
   "docstatus": 0,
   "doctype": "Market Segment",
-  "market_segment": "Water & Wastewater",
-  "modified": "2026-09-07 21:28:55.169788",
-  "name": "Water & Wastewater"
+  "market_segment": "Refineries & Petrochemicals",
+  "modified": "2026-10-20 11:05:31.686029",
+  "name": "Refineries & Petrochemicals"
  },
  {
   "docstatus": 0,
   "doctype": "Market Segment",
-  "market_segment": "Oil & Gas",
-  "modified": "2026-09-07 21:28:55.180299",
-  "name": "Oil & Gas"
+  "market_segment": "Terminals & Tank Farms",
+  "modified": "2026-10-20 11:05:31.698148",
+  "name": "Terminals & Tank Farms"
  },
  {
   "docstatus": 0,
   "doctype": "Market Segment",
-  "market_segment": "Power & Energy",
-  "modified": "2026-09-07 21:28:55.184413",
-  "name": "Power & Energy"
+  "market_segment": "Pipelines & Marine",
+  "modified": "2026-10-20 11:05:31.701235",
+  "name": "Pipelines & Marine"
  },
  {
   "docstatus": 0,
   "doctype": "Market Segment",
-  "market_segment": "Infrastructure & Roads",
-  "modified": "2026-09-07 21:28:55.188117",
-  "name": "Infrastructure & Roads"
+  "market_segment": "Green Energy & Transition",
+  "modified": "2026-10-20 11:05:31.703599",
+  "name": "Green Energy & Transition"
  },
  {
   "docstatus": 0,
   "doctype": "Market Segment",
-  "market_segment": "Industrial/Manufacturing Plants",
-  "modified": "2026-09-07 21:28:55.191204",
-  "name": "Industrial/Manufacturing Plants"
- },
- {
-  "docstatus": 0,
-  "doctype": "Market Segment",
-  "market_segment": "Marine & Ports",
-  "modified": "2026-09-07 21:28:55.194347",
-  "name": "Marine & Ports"
- },
- {
-  "docstatus": 0,
-  "doctype": "Market Segment",
-  "market_segment": "Government/Municipal",
-  "modified": "2026-09-07 21:28:55.197464",
-  "name": "Government/Municipal"
+  "market_segment": "Power Plants & Utilities",
+  "modified": "2026-10-20 11:05:31.707348",
+  "name": "Power Plants & Utilities"
  }
 ]

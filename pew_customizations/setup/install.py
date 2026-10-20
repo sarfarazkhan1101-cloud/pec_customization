@@ -1,18 +1,10 @@
 import frappe
 from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 
+from pew_customizations.crm.config import MARKET_SEGMENTS
+
 # The tender pipeline on Opportunity (stages, fields, notifications, handoff) lives in
 # pew_customizations.crm; this module keeps the PEC project-execution setup.
-
-MARKET_SEGMENTS = [
-	"Water & Wastewater",
-	"Oil & Gas",
-	"Power & Energy",
-	"Infrastructure & Roads",
-	"Industrial/Manufacturing Plants",
-	"Marine & Ports",
-	"Government/Municipal",
-]
 
 # Sequential engineering service lifecycle. (task_name, start_day, duration_days)
 LIFECYCLE_TASKS = [
@@ -63,6 +55,9 @@ NOTIFICATION_REVISION_SUBMITTED = "PEC Revision Sent for Review"
 NOTIFICATION_REVISION_REJECTED = "PEC Revision Requires Changes"
 NOTIFICATION_REVISION_APPROVED = "PEC Revision Approved"
 NOTIFICATION_TASK_OVERDUE = "PEC Task Overdue"
+
+# Further client names on a Project, below the Consultant. The DCI header lists the filled ones.
+PROJECT_CLIENT_FIELDS = [f"client_{n}" for n in range(1, 6)]
 
 
 def run():
@@ -125,30 +120,24 @@ def get_custom_fields():
 				"fieldtype": "Tab Break",
 				"insert_after": "message",
 			},
+			# Project Manager | links, then End User | Consultant with Client 1 - 3 | Client 4 - 5 below
+			{
+				"fieldname": "pec_team_section",
+				"label": "Project Team & Links",
+				"fieldtype": "Section Break",
+				"insert_after": "pec_details_tab",
+			},
 			{
 				"fieldname": "project_manager",
 				"label": "Project Manager",
 				"fieldtype": "Link",
 				"options": "User",
-				"insert_after": "pec_details_tab",
-			},
-			{
-				"fieldname": "end_user",
-				"label": "End User",
-				"fieldtype": "Data",
-				"description": "The end client / operating owner, where different from the billed Customer.",
-				"insert_after": "project_manager",
-			},
-			{
-				"fieldname": "consultant",
-				"label": "Consultant",
-				"fieldtype": "Data",
-				"insert_after": "end_user",
+				"insert_after": "pec_team_section",
 			},
 			{
 				"fieldname": "pec_details_column_break",
 				"fieldtype": "Column Break",
-				"insert_after": "consultant",
+				"insert_after": "project_manager",
 			},
 			{
 				"fieldname": "project_folder_link",
@@ -165,10 +154,51 @@ def get_custom_fields():
 				"insert_after": "project_folder_link",
 			},
 			{
+				"fieldname": "pec_client_section",
+				"label": "Client Details",
+				"fieldtype": "Section Break",
+				"insert_after": "sharepoint_link",
+				# hides the line below this section, so the Clients read as part of it
+				"hide_border": 1,
+			},
+			{
+				"fieldname": "end_user",
+				"label": "End User",
+				"fieldtype": "Data",
+				"description": "The end client / operating owner, where different from the billed Customer.",
+				"insert_after": "pec_client_section",
+			},
+			{
+				"fieldname": "pec_client_column_break",
+				"fieldtype": "Column Break",
+				"insert_after": "end_user",
+			},
+			{
+				"fieldname": "consultant",
+				"label": "Consultant",
+				"fieldtype": "Data",
+				"insert_after": "pec_client_column_break",
+			},
+			{
+				"fieldname": "pec_clients_section",
+				"fieldtype": "Section Break",
+				"insert_after": "consultant",
+			},
+			_client_field(1, "pec_clients_section"),
+			_client_field(2, "client_1"),
+			_client_field(3, "client_2"),
+			{
+				"fieldname": "pec_clients_column_break",
+				"fieldtype": "Column Break",
+				"insert_after": "client_3",
+			},
+			_client_field(4, "pec_clients_column_break"),
+			_client_field(5, "client_4"),
+			{
 				"fieldname": "pec_input_section",
 				"label": "Project Input / Design Basis",
 				"fieldtype": "Section Break",
-				"insert_after": "sharepoint_link",
+				"insert_after": "client_5",
 			},
 			{
 				"fieldname": "project_input",
@@ -282,6 +312,16 @@ def get_custom_fields():
 				"in_standard_filter": 1,
 			},
 		],
+	}
+
+
+def _client_field(n, insert_after):
+	"""Client 1 ... Client 5 on Project (PROJECT_CLIENT_FIELDS)."""
+	return {
+		"fieldname": f"client_{n}",
+		"label": f"Client {n}",
+		"fieldtype": "Data",
+		"insert_after": insert_after,
 	}
 
 
