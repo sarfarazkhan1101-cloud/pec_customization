@@ -1,7 +1,8 @@
 // "Client Site Visit" checkbox on the Frappe HR PWA check-in sheet.
 //
 // Added to /hrms by pew_customizations.hr.pwa (an after_request hook); no HRMS file is changed.
-// Ticking the box takes a fresh GPS reading, and that one Employee Checkin insert is sent with
+// Shown only to employees HR allows (Employee "Allow Client Site Visit"); the server checks that
+// too. Ticking the box takes a fresh GPS reading, and that one Employee Checkin insert is sent with
 // pew_client_site_visit = 1 and that reading. The server (pew_customizations.hr.employee_checkin)
 // then skips only the office radius check. If this script cannot find the sheet after an HRMS
 // update, nothing is shown and the standard office check applies.
@@ -10,7 +11,13 @@
 (function () {
 	const SHEET_TRIGGER = "open-checkin-modal"; // id of the PWA button that opens the check-in sheet
 	const INSERT_PATH = "/api/method/frappe.client.insert";
+	const ALLOWED_URL = "/api/method/pew_customizations.hr.pwa.client_site_visit_allowed";
 	const FIELD = "pew_client_site_visit";
+	const nativeFetch = window.fetch;
+
+	// Whether HR allows this employee: null (not asked yet), "asking", true or false. Asked when the
+	// sheet first opens, when the employee is logged in.
+	let allowed = null;
 
 	// The open sheet's state. A new sheet (or a closed one) starts unticked.
 	let visit = newVisit(null);
@@ -44,11 +51,41 @@
 		if (!sheet) return;
 		const buttons = sheet.querySelectorAll("button");
 		const confirm = buttons[buttons.length - 1];
-		if (!confirm || !confirm.parentNode) return;
+		if (!confirm || !confirm.parentNode || sheet.classList.contains("overlay-hidden")) {
+			closed(sheet);
+			return;
+		}
 
 		if (visit.root !== confirm.parentNode) visit = newVisit(confirm.parentNode);
+		if (allowed !== true) {
+			if (allowed === null) askAllowed();
+			return;
+		}
 		if (!visit.root.querySelector(".pew-client-site"))
 			visit.root.insertBefore(render(), confirm);
+	}
+
+	// The sheet is closed (Ionic removes its content, or hides it). The next one starts unticked, and
+	// a "no" is asked again, so access HR grants meanwhile shows without reloading the app. Ionic's
+	// dismiss events do not reach outside listeners, hence the check on the page itself.
+	function closed(sheet) {
+		if (!visit.root && allowed !== false) return;
+		sheet.querySelectorAll(".pew-client-site").forEach((box) => box.remove());
+		visit = newVisit(null);
+		if (allowed !== true) allowed = null;
+	}
+
+	function askAllowed() {
+		allowed = "asking";
+		nativeFetch
+			.call(window, ALLOWED_URL, { headers: { Accept: "application/json" } })
+			.then((response) => (response.ok ? response.json() : { message: false }))
+			.then((data) => data.message === true)
+			.catch(() => false)
+			.then((ok) => {
+				allowed = ok;
+				if (ok) sync();
+			});
 	}
 
 	function render() {
@@ -136,7 +173,6 @@
 		}
 	}
 
-	const nativeFetch = window.fetch;
 	window.fetch = function (input, init) {
 		const body = visit.checked ? checkinInsert(input, init) : null;
 		if (!body) return nativeFetch.apply(window, arguments);
@@ -159,13 +195,6 @@
 			);
 		});
 	};
-
-	// A closed sheet starts unticked when opened again, whether or not Ionic kept its content.
-	document.addEventListener("ionModalDidDismiss", (event) => {
-		if (event.target !== findSheet()) return;
-		event.target.querySelectorAll(".pew-client-site").forEach((box) => box.remove());
-		visit = newVisit(null);
-	});
 
 	let queued = false;
 	new MutationObserver(() => {

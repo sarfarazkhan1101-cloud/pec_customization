@@ -18,11 +18,13 @@ from frappe.utils import add_days, get_datetime, getdate, now_datetime
 from werkzeug.wrappers import Response
 
 from pew_customizations.hr.employee_checkin import (
+	ALLOWED_FIELD,
 	CLIENT_SITE_FIELD,
 	EmployeeCheckinClientSite,
+	is_allowed,
 	validate_client_site_coordinates,
 )
-from pew_customizations.hr.pwa import SCRIPT, add_client_site_script
+from pew_customizations.hr.pwa import SCRIPT, add_client_site_script, client_site_visit_allowed
 
 # The office (a Shift Location with a 200 m radius) and points around it, as (latitude, longitude)
 OFFICE = (18.5204, 73.8567)
@@ -31,7 +33,8 @@ OUTSIDE_OFFICE = (18.5294, 73.8567)  # ~1 km away
 CLIENT_SITE = (18.6554, 73.8567)  # ~15 km away
 OTHER_CLIENT_SITE = (18.4529, 73.8652)  # ~7.5 km away
 
-USER = "pew.test.clientsite.employee@example.com"
+USER = "pew.test.clientsite.employee@example.com"  # HR allows this employee client site visits
+OTHER_USER = "pew.test.clientsite.other@example.com"  # this one not
 PREFIX = "PEW Client Site Test"
 
 
@@ -105,7 +108,8 @@ class TestHrmsPageScript(IntegrationTestCase):
 
 
 class TestClientSiteCheckin(IntegrationTestCase):
-	"""Scenarios A-E against HRMS: the office radius is skipped only for a flagged check-in."""
+	"""Scenarios A-E against HRMS: the office radius is skipped only for a flagged check-in, and only
+	employees HR allows may flag one."""
 
 	SHOW_TRANSACTION_COMMIT_WARNINGS = True  # everything here must be rolled back
 
@@ -115,8 +119,11 @@ class TestClientSiteCheckin(IntegrationTestCase):
 			raise SkipTest("Frappe HR (hrms) is not installed on this site")
 		super().setUpClass()
 		cls.enterClassContext(patch("frappe.sendmail"))
-		if not frappe.get_meta("Employee Checkin").has_field(CLIENT_SITE_FIELD):
-			raise AssertionError(f"Employee Checkin has no {CLIENT_SITE_FIELD} field: run bench migrate")
+		if not (
+			frappe.get_meta("Employee Checkin").has_field(CLIENT_SITE_FIELD)
+			and frappe.get_meta("Employee").has_field(ALLOWED_FIELD)
+		):
+			raise AssertionError("The Client Site Visit fields are missing: run bench migrate")
 
 		frappe.db.set_single_value("HR Settings", "allow_geolocation_tracking", 1)
 		cls.company = (
@@ -133,7 +140,9 @@ class TestClientSiteCheckin(IntegrationTestCase):
 				"to_date": add_days(today, 60),
 			}
 		).insert()
-		cls.employee = _employee(cls.company, cls.joined, holiday_list.name)
+		cls.holiday_list = holiday_list.name
+		cls.employee = _employee(USER, "Allowed", cls.company, cls.joined, cls.holiday_list, allowed=1)
+		cls.other = _employee(OTHER_USER, "Not Allowed", cls.company, cls.joined, cls.holiday_list, allowed=0)
 		cls.office = frappe.get_doc(
 			{
 				"doctype": "Shift Location",
@@ -159,17 +168,18 @@ class TestClientSiteCheckin(IntegrationTestCase):
 				"last_sync_of_checkin": now_datetime(),
 			}
 		).insert()
-		frappe.get_doc(
-			{
-				"doctype": "Shift Assignment",
-				"employee": cls.employee,
-				"shift_type": cls.shift.name,
-				"company": cls.company,
-				"start_date": cls.joined,
-				"shift_location": cls.office.name,
-				"status": "Active",
-			}
-		).submit()
+		for employee in (cls.employee, cls.other):
+			frappe.get_doc(
+				{
+					"doctype": "Shift Assignment",
+					"employee": employee,
+					"shift_type": cls.shift.name,
+					"company": cls.company,
+					"start_date": cls.joined,
+					"shift_location": cls.office.name,
+					"status": "Active",
+				}
+			).submit()
 
 	def tearDown(self):
 		frappe.set_user("Administrator")
@@ -181,9 +191,9 @@ class TestClientSiteCheckin(IntegrationTestCase):
 		"""A past working day of the test employee; each test uses its own days."""
 		return add_days(getdate(), -offset)
 
-	def checkin(self, day, time, log_type, location, client_site=0):
+	def checkin(self, day, time, log_type, location, client_site=0, employee=None):
 		return frappe.get_doc(
-			_checkin_dict(self.employee, day, time, log_type, location, client_site)
+			_checkin_dict(employee or self.employee, day, time, log_type, location, client_site)
 		).insert()
 
 	def assert_saved(self, doc, day, time, location, client_site):
@@ -337,6 +347,63 @@ class TestClientSiteCheckin(IntegrationTestCase):
 		self.assertEqual(set(linked), {attendance.name})  # every log of the day, flagged or not
 		return attendance
 
+	# who may use it ----------------------------------------------------------------------------
+
+	def test_f_app_shows_the_box_only_to_allowed_employees(self):
+		with self.set_user(USER):
+			self.assertIs(client_site_visit_allowed(), True)
+		with self.set_user(OTHER_USER):
+			self.assertIs(client_site_visit_allowed(), False)
+		self.assertIs(client_site_visit_allowed(), False)  # Administrator: no Employee record
+
+	def test_f_only_allowed_employees_may_tick_it(self):
+		day = self.day(2)
+		self.checkin(day, "09:00:00", "IN", NEAR_OFFICE, employee=self.other)  # office as before
+		with self.set_user(OTHER_USER), self.assertRaisesRegex(frappe.ValidationError, "not enabled"):
+			frappe.client.insert(_checkin_dict(self.other, day, "12:00:00", "OUT", CLIENT_SITE, 1))
+		with self.assertRaisesRegex(frappe.ValidationError, "not enabled"):  # entered by HR in the desk
+			self.checkin(day, "12:00:00", "OUT", CLIENT_SITE, client_site=1, employee=self.other)
+
+		self.checkin(day, "12:00:00", "OUT", CLIENT_SITE, client_site=1)  # the allowed employee
+
+	def test_f_withdrawn_permission_keeps_old_check_ins(self):
+		day = self.day(1)
+		visit = self.checkin(day, "10:00:00", "IN", CLIENT_SITE, client_site=1)
+		frappe.db.set_value("Employee", self.employee, ALLOWED_FIELD, 0)
+		try:
+			visit.reload()
+			visit.device_id = "Corrected by HR"
+			visit.save()  # still valid, and still editable
+			with self.assertRaisesRegex(frappe.ValidationError, "not enabled"):
+				self.checkin(day, "17:00:00", "OUT", CLIENT_SITE, client_site=1)
+		finally:
+			frappe.db.set_value("Employee", self.employee, ALLOWED_FIELD, 1)
+
+	def test_f_only_hr_can_grant_it(self):
+		"""Users of HRMS's Employee Self Service user type may edit their own Employee record."""
+		if not frappe.db.exists("User Type", "Employee Self Service"):
+			self.skipTest("this HRMS has no Employee Self Service user type")
+		self_service = "pew.test.clientsite.selfservice@example.com"
+		employee = _employee(self_service, "Self Service", self.company, self.joined, self.holiday_list, 0)
+		user = frappe.get_doc("User", self_service)
+		user.user_type = "Employee Self Service"
+		user.save()
+
+		with self.set_user(self_service):
+			own = frappe.get_doc("Employee", employee)
+			own.set(ALLOWED_FIELD, 1)
+			with self.assertRaisesRegex(frappe.PermissionError, "Only HR"):
+				own.save()
+			own.reload()
+			own.cell_number = "9876543210"
+			own.save()  # the rest of their record stays editable
+		self.assertFalse(is_allowed(employee))
+
+		by_hr = frappe.get_doc("Employee", employee)
+		by_hr.set(ALLOWED_FIELD, 1)
+		by_hr.save()
+		self.assertTrue(is_allowed(employee))
+
 	def test_flag_cannot_be_changed_later(self):
 		day = self.day(3)
 		office_in = self.checkin(day, "09:00:00", "IN", NEAR_OFFICE)
@@ -373,29 +440,24 @@ def _checkin_dict(employee, day, time, log_type, location, client_site):
 	}
 
 
-def _employee(company, joined, holiday_list):
-	if not frappe.db.exists("User", USER):
+def _employee(user, name, company, joined, holiday_list, allowed):
+	if not frappe.db.exists("User", user):
 		frappe.get_doc(
-			{
-				"doctype": "User",
-				"email": USER,
-				"first_name": "Client Site Employee",
-				"send_welcome_email": 0,
-				"roles": [{"role": "Employee"}],
-			}
+			{"doctype": "User", "email": user, "first_name": f"Client Site {name}", "send_welcome_email": 0}
 		).insert(ignore_permissions=True)
-	return (
+	return (  # linking the Employee gives the user the Employee role
 		frappe.get_doc(
 			{
 				"doctype": "Employee",
-				"first_name": f"{PREFIX} Employee",
+				"first_name": f"{PREFIX} {name}",
 				"company": company,
-				"user_id": USER,
+				"user_id": user,
 				"gender": frappe.get_all("Gender", pluck="name", limit=1)[0],
 				"date_of_birth": "1990-01-01",
 				"date_of_joining": joined,
 				"holiday_list": holiday_list,
 				"status": "Active",
+				ALLOWED_FIELD: allowed,
 			}
 		)
 		.insert()

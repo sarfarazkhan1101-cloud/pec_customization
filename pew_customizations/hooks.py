@@ -124,6 +124,13 @@ doc_events = {
 			"pew_customizations.crm.opportunity.unlink_deleted_project",
 		],
 	},
+	# Client Site Visit (pew_customizations/hr): who may use it, and only HR may grant it
+	"Employee Checkin": {
+		"before_validate": "pew_customizations.hr.employee_checkin.validate_client_site_allowed",
+	},
+	"Employee": {
+		"validate": "pew_customizations.hr.employee_checkin.validate_employee",
+	},
 }
 
 # Work Order / Client PO files are readable by Sales Managers only

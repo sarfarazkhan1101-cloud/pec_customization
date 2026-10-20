@@ -6,9 +6,12 @@ HRMS refuses a check-in made outside the radius of the employee's Shift Location
 skips only that radius check: its coordinates are still required and must be valid, and every other
 HRMS check (active employee, duplicate log, shift, geolocation) runs unchanged.
 
-No HRMS file is changed. The flag is a Custom Field created here, the check is a mixin added through
-the `extend_doctype_class` hook, and the PWA checkbox is added by hr/pwa.py. On a site without HRMS
-all of it is inert.
+Only employees HR has ticked "Allow Client Site Visit" for may flag a new check-in; the PWA shows the
+checkbox to them alone (hr/pwa.py).
+
+No HRMS file is changed. The fields are Custom Fields created here, the radius check is a mixin added
+through the `extend_doctype_class` hook, and the permission checks are doc_events. On a site without
+HRMS all of it is inert.
 """
 
 import frappe
@@ -17,6 +20,9 @@ from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 from frappe.utils import flt
 
 CLIENT_SITE_FIELD = "pew_client_site_visit"
+ALLOWED_FIELD = "pew_allow_client_site_visit"
+# Who may change ALLOWED_FIELD. HRMS's Employee Self Service role can edit an employee's own record.
+HR_ROLES = {"HR Manager", "HR User", "System Manager"}
 
 # Created from code rather than exported as a fixture: a fixture for a doctype that does not exist
 # would stop `bench migrate` on a site without HRMS.
@@ -33,7 +39,17 @@ CUSTOM_FIELDS = {
 			"set_only_once": 1,
 			"description": "Checked in or out at a client site. The office radius is not applied; the location is still required.",
 		}
-	]
+	],
+	"Employee": [
+		{
+			"fieldname": ALLOWED_FIELD,
+			"label": "Allow Client Site Visit",
+			"fieldtype": "Check",
+			"insert_after": "attendance_device_id",
+			"in_standard_filter": 1,
+			"description": "Shows the Client Site Visit checkbox in the Frappe HR app, so this employee can check in and out at a client site. Only HR can change this.",
+		}
+	],
 }
 
 
@@ -52,6 +68,33 @@ class EmployeeCheckinClientSite:
 		# Same switch as the HRMS check: without geolocation tracking no location is asked for at all
 		if frappe.db.get_single_value("HR Settings", "allow_geolocation_tracking"):
 			validate_client_site_coordinates(self.latitude, self.longitude)
+
+
+def validate_client_site_allowed(doc, method=None):
+	"""Employee Checkin before_validate: only an allowed employee may flag a new check-in. Existing ones
+	stay valid when HR later withdraws the permission."""
+	if doc.is_new() and doc.get(CLIENT_SITE_FIELD) and not is_allowed(doc.employee):
+		frappe.throw(
+			_("Client Site Visit is not enabled for {0}. Please contact HR.").format(
+				doc.employee_name or doc.employee
+			),
+			title=_("Not Allowed"),
+		)
+
+
+def validate_employee(doc, method=None):
+	"""Employee validate: only HR may change "Allow Client Site Visit"."""
+	changed = doc.get(ALLOWED_FIELD) if doc.is_new() else doc.has_value_changed(ALLOWED_FIELD)
+	if changed and not HR_ROLES.intersection(frappe.get_roles()):
+		frappe.throw(_("Only HR can change Allow Client Site Visit."), frappe.PermissionError)
+
+
+def is_allowed(employee):
+	return bool(
+		employee
+		and frappe.get_meta("Employee").has_field(ALLOWED_FIELD)
+		and frappe.db.get_value("Employee", employee, ALLOWED_FIELD)
+	)
 
 
 def validate_client_site_coordinates(latitude, longitude):
