@@ -88,6 +88,7 @@ doc_events = {
 		"validate": [
 			"pew_customizations.utils.validate_task_scope",
 			"pew_customizations.projects.task_revisions.validate",
+			"pew_customizations.projects.task_completion.validate",
 		],
 		"on_update": "pew_customizations.utils.sync_scope_from_tasks",
 		"after_delete": "pew_customizations.utils.sync_scope_from_tasks",
@@ -141,6 +142,7 @@ has_permission = {
 after_migrate = [
 	"pew_customizations.crm.setup.after_migrate",
 	"pew_customizations.hr.employee_checkin.after_migrate",
+	"pew_customizations.hr.job_application.after_migrate",
 ]
 
 # Client Site Visit on the Frappe HR check-in (pew_customizations/hr). No HRMS file is changed, and

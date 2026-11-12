@@ -161,7 +161,25 @@ def _seed_task_progress(task_names, percentages):
 			continue  # already seeded on a previous run
 		task.progress = pct
 		task.status = "Completed" if pct == 100 else "Working"
+		if task.status == "Completed" and not task.get("pec_completion_attachment"):
+			task.pec_completion_attachment = _demo_deliverable(task)
 		task.save(ignore_permissions=True)
+
+
+def _demo_deliverable(task):
+	"""A Task is marked Completed only with its deliverable attached (projects/task_completion.py)."""
+	file = frappe.get_doc(
+		{
+			"doctype": "File",
+			"file_name": f"{task.name}-deliverable.txt",
+			"attached_to_doctype": "Task",
+			"attached_to_name": task.name,
+			"attached_to_field": "pec_completion_attachment",
+			"is_private": 1,
+			"content": f"Demo deliverable: {task.subject}",
+		}
+	).insert(ignore_permissions=True)
+	return file.file_url
 
 
 def _get_or_create_scope(project, scope_name, scope_type, template_name):

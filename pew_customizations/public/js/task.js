@@ -12,10 +12,16 @@ frappe.ui.form.on("Task", {
 	refresh(frm) {
 		pec_load_approval_codes(frm);
 		pec_toggle_add_row(frm);
+		pec_remember_saved_completion(frm);
+		pec_toggle_completion_attachment(frm);
 	},
 
 	project(frm) {
 		pec_load_approval_codes(frm);
+	},
+
+	status(frm) {
+		pec_toggle_completion_attachment(frm);
 	},
 });
 
@@ -62,6 +68,30 @@ function pec_load_approval_codes(frm) {
 			project: frm.doc.project,
 		})
 		.then((codes) => set_options(codes || []));
+}
+
+// Completion Attachment: mandatory once the Task is Completed, by the rule of
+// projects/task_completion.py. A Task Completed before that rule without a file stays saveable.
+function pec_remember_saved_completion(frm) {
+	if (frm.is_new()) {
+		frm.pec_saved_completion = {};
+	} else if (!frm.is_dirty()) {
+		frm.pec_saved_completion = {
+			status: frm.doc.status,
+			attachment: frm.doc.pec_completion_attachment,
+		};
+	}
+}
+
+function pec_toggle_completion_attachment(frm) {
+	if (!frm.fields_dict.pec_completion_attachment) {
+		return;
+	}
+	const saved = frm.pec_saved_completion || {};
+	frm.toggle_reqd(
+		"pec_completion_attachment",
+		frm.doc.status === "Completed" && (saved.status !== "Completed" || !!saved.attachment)
+	);
 }
 
 // The grid redraws itself after each of the add / remove / move events

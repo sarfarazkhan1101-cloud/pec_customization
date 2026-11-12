@@ -265,6 +265,17 @@ def get_custom_fields():
 				"options": "User",
 				"insert_after": "custom_discipline",
 			},
+			# The deliverable that completes the Task, above Completed By / Completed On and shown like
+			# them only once the Task is Completed. Required by projects/task_completion.py.
+			{
+				"fieldname": "pec_completion_attachment",
+				"label": "Completion Attachment",
+				"fieldtype": "Attach",
+				"insert_after": "parent_task",
+				"depends_on": 'eval:doc.status == "Completed"',
+				"no_copy": 1,
+				"description": "The completed deliverable. Required to mark the Task as Completed.",
+			},
 			# Revision tracker (R0 - R10), after the standard progress fields. Filled in on the Task
 			# form and validated by projects/task_revisions.py.
 			{

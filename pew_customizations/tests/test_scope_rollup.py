@@ -77,6 +77,10 @@ class TestScopeRollup(IntegrationTestCase):
 		for name in tasks:
 			task = frappe.get_doc("Task", name)
 			task.update({"status": status, **values})
+			# a Task is marked Completed only with its deliverable attached (projects/task_completion.py);
+			# not a /files URL, so Frappe does not look for the file on disk
+			if status == "Completed" and not task.get("pec_completion_attachment"):
+				task.pec_completion_attachment = "rollup-test-deliverable.pdf"
 			task.save(ignore_permissions=True)
 
 	def scope_state(self, scope):
