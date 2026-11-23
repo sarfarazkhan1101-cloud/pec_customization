@@ -151,6 +151,7 @@ after_migrate = [
 	"pew_customizations.crm.setup.after_migrate",
 	"pew_customizations.hr.employee_checkin.after_migrate",
 	"pew_customizations.hr.job_application.after_migrate",
+	"pew_customizations.hr.additional_salary.after_migrate",
 ]
 
 # Client Site Visit on the Frappe HR check-in (pew_customizations/hr). No HRMS file is changed, and
