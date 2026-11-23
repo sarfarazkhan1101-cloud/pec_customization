@@ -94,8 +94,16 @@ doc_events = {
 		"after_delete": "pew_customizations.utils.sync_scope_from_tasks",
 	},
 	"Scope": {
-		"on_update": "pew_customizations.utils.sync_project_from_scopes",
+		"on_update": [
+			"pew_customizations.utils.sync_project_from_scopes",
+			"pew_customizations.projects.scope_access.sync_engineer_access",
+		],
+		"on_trash": "pew_customizations.projects.scope_access.revoke_all",
 		"after_delete": "pew_customizations.utils.sync_project_from_scopes",
+	},
+	# a removed Task assignment takes back the read-only share Frappe added for it
+	"ToDo": {
+		"on_update": "pew_customizations.projects.task_access.remove_share_on_unassign",
 	},
 	"Opportunity": {
 		"onload": "pew_customizations.crm.opportunity.onload",
@@ -173,6 +181,7 @@ doctype_js = {
 
 doctype_list_js = {
 	"Scope": "public/js/scope_list.js",
+	"Task": "public/js/task_list.js",
 }
 
 # Apps

@@ -349,13 +349,17 @@ def _latest_field(fieldname, label, fieldtype, insert_after):
 
 
 # Task rights of the PEC roles, added to ERPNext's own (Projects User). `report` opens the PEC DCI
-# Report and `export` exports it: Draftsman and Associate can view the DCI but not export it.
+# Report and `export` exports it: Associate can view the DCI but not export it.
+# Engineers create Tasks in the Scopes assigned to them (projects/scope_access.py) and assign them to
+# Draftsmen, which needs `share`: Frappe shares a Task with an assignee who cannot read it.
+# Draftsmen have no right on Task: they see only the Tasks assigned to them, read-only
+# (projects/task_access.py).
 TASK_PERMISSION_TYPES = ("read", "write", "create", "delete", "report", "export", "print", "email", "share")
 TASK_PERMISSIONS = {
 	"Projects Manager": TASK_PERMISSION_TYPES,
 	"PEC Administrator": TASK_PERMISSION_TYPES,
-	"Engineer": ("read", "write", "report", "export", "print", "email"),
-	"Draftsman": ("read", "write", "report", "print"),
+	"Engineer": ("read", "write", "create", "report", "export", "print", "email", "share"),
+	"Draftsman": (),
 	"Associate": ("read", "report", "print"),
 }
 TASK_SEARCH_FIELDS = "subject,pec_document_number"

@@ -403,10 +403,17 @@ class TestTaskRevisions(IntegrationTestCase):
 			self.new_task(project, f"Document {n}", pec_document_number=f"D-{n:03d}")
 		self.assertEqual(len(get_dci_data({"project": project.name}).rows), 25)
 
+	def test_engineer_reports_on_the_scopes_assigned_to_them(self):
+		# the Assigned Engineer is limited to their Scopes (projects/scope_access.py)
+		dci = self.dci_project()
+		frappe.set_user(ENGINEER)
+		rows = get_dci_data({"project": dci.project.name}).rows
+		self.assertEqual(sorted(row.document_name for row in rows), ["Isometric", "Layout", "Unnumbered"])
+
 	def test_execution_team_restriction_applies_to_the_report(self):
 		dci = self.dci_project()
 		other = self.new_project()
-		frappe.get_doc(
+		restriction = frappe.get_doc(
 			{
 				"doctype": "User Permission",
 				"user": DRAFTSMAN,
@@ -415,6 +422,8 @@ class TestTaskRevisions(IntegrationTestCase):
 				"apply_to_all_doctypes": 1,
 			}
 		).insert(ignore_permissions=True)
+		# rolled back only after the whole class: later tests need DRAFTSMAN unrestricted
+		self.addCleanup(frappe.delete_doc, "User Permission", restriction.name, ignore_permissions=True)
 
 		frappe.set_user(DRAFTSMAN)
 		self.assertEqual(get_dci_data({"project": dci.project.name}).rows, [])
@@ -434,7 +443,7 @@ class TestTaskRevisions(IntegrationTestCase):
 
 	def test_standard_export_to_excel_and_csv(self):
 		dci = self.dci_project()
-		frappe.set_user(ENGINEER)
+		frappe.set_user(MANAGER)  # the whole Project; an Engineer exports only their Scopes
 
 		sheet = load_workbook(BytesIO(self.export(dci.project, "Excel"))).active
 		header = [cell.value for cell in sheet[1]]
@@ -451,7 +460,7 @@ class TestTaskRevisions(IntegrationTestCase):
 
 	def test_client_format_workbook(self):
 		dci = self.dci_project()
-		frappe.set_user(ENGINEER)
+		frappe.set_user(MANAGER)  # the whole Project; an Engineer exports only their Scopes
 		download_dci_xlsx(dci.project.name)
 		self.assertEqual(frappe.response.type, "binary")
 		self.assertEqual(frappe.response.filename, f"DCI_{dci.project.name}_{today()}.xlsx")
@@ -558,7 +567,9 @@ class TestTaskRevisions(IntegrationTestCase):
 			],
 		)
 
-	def test_draftsman_can_view_but_not_export(self):
+	def test_projects_user_can_view_but_not_export(self):
+		# DRAFTSMAN holds Projects User, whose rights decide here: the Draftsman role alone has no right
+		# on Task and no DCI report (tests/test_task_access.py)
 		dci = self.dci_project()
 		frappe.set_user(DRAFTSMAN)
 
@@ -587,7 +598,8 @@ class TestTaskRevisions(IntegrationTestCase):
 
 		self.assertEqual(rights("Projects Manager"), (1, 1, 1, 1))
 		self.assertEqual(rights("Engineer"), (1, 1, 1, 1))
-		self.assertEqual(rights("Draftsman"), (1, 1, 1, 0))
+		# Draftsmen see only the Tasks assigned to them, by share (tests/test_task_access.py)
+		self.assertEqual(rights("Draftsman"), (0, 0, 0, 0))
 		self.assertEqual(rights("Associate"), (1, 0, 1, 0))
 		# ERPNext's own rule is kept
 		self.assertEqual(rights("Projects User"), (1, 1, 1, 0))

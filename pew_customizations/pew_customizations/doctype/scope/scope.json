@@ -140,7 +140,7 @@
    "link_fieldname": "scope"
   }
  ],
- "modified": "2026-10-02 00:00:00.000000",
+ "modified": "2026-11-18 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "PEW Customizations",
  "name": "Scope",
@@ -160,7 +160,6 @@
    "write": 1
   },
   {
-   "create": 1,
    "email": 1,
    "export": 1,
    "print": 1,
